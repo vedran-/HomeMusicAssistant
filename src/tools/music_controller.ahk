@@ -32,6 +32,9 @@ Main() {
             case "toggle":
                 TogglePlayback()
             
+            case "toggle-shuffle":
+                ToggleShuffleMode()
+            
             case "search":
                 if (A_Args.Length >= 2) {
                     SearchMusic(A_Args[2])
@@ -98,40 +101,36 @@ TogglePlayback() {
     }
     
     try {
-        ; Try to find play/pause button using various selectors
-        playPauseBtn := ""
+        ; Find all Play/Pause buttons and use the last one (usually the main player control)
+        playButtons := cUIA.FindElements({Name: "Play", Type: "Button"})
+        pauseButtons := cUIA.FindElements({Name: "Pause", Type: "Button"})
         
-        ; Method 1: Try common YouTube Music selectors
-        try {
-            playPauseBtn := cUIA.FindElement({AutomationId: "play-pause-button"})
-        } catch {
-            ; Method 2: Try aria-label attributes
-            try {
-                playPauseBtn := cUIA.FindElement({Name: "Play", Type: "Button"})
-            } catch {
-                try {
-                    playPauseBtn := cUIA.FindElement({Name: "Pause", Type: "Button"})
-                } catch {
-                    ; Method 3: Try generic media controls
-                    try {
-                        playPauseBtn := cUIA.FindElement({Name: "Play (k)", Type: "Button"})
-                    } catch {
-                        try {
-                            playPauseBtn := cUIA.FindElement({Name: "Pause (k)", Type: "Button"})
-                        }
-                    }
-                }
-            }
+        MsgBox("Debug: Found " . playButtons.Length . " Play buttons and " . pauseButtons.Length . " Pause buttons", "Toggle Debug", 0)
+        
+        ; Try Pause button first (if music is playing)
+        if (pauseButtons.Length > 0) {
+            lastPauseBtn := pauseButtons[pauseButtons.Length]
+            MsgBox("About to click Pause button (last one found)!", "Toggle Action", 0)
+            lastPauseBtn.Click()
+            MsgBox("Pause button clicked!", "Toggle Result", 0)
+            Echo("Music paused")
+            return
         }
         
-        if (playPauseBtn) {
-            playPauseBtn.Click()
-            Echo("Toggled playback")
-        } else {
-            ; Fallback to keyboard shortcut
-            cUIA.Send("{Space}")
-            Echo("Toggled playback (keyboard fallback)")
+        ; If no Pause button, try Play button
+        if (playButtons.Length > 0) {
+            lastPlayBtn := playButtons[playButtons.Length]
+            MsgBox("About to click Play button (last one found)!", "Toggle Action", 0)
+            lastPlayBtn.Click()
+            MsgBox("Play button clicked!", "Toggle Result", 0)
+            Echo("Music resumed")
+            return
         }
+        
+        ; Fallback to keyboard shortcut
+        MsgBox("No Play/Pause buttons found. Using Space key fallback.", "Toggle Fallback", 0)
+        cUIA.Send("{Space}")
+        Echo("Toggled playback (keyboard fallback)")
         
     } catch Error as e {
         Echo("Error toggling playback: " . e.message . " - Using keyboard fallback")
@@ -517,7 +516,9 @@ MUSIC COMMANDS:
   search <term>        - Search for music in YouTube Music
                         Example: search ""rock music""
   
-  toggle               - Toggle play/pause current music
+  toggle               - Toggle play/pause current music (uses last Play/Pause button)
+  
+  toggle-shuffle       - Toggle shuffle mode on/off (uses last Shuffle button)
 
 SYSTEM VOLUME COMMANDS:
   mute                 - Mute system audio
@@ -533,6 +534,7 @@ EXAMPLES:
   music_controller.ahk play jazz
   music_controller.ahk search ""study music""
   music_controller.ahk toggle
+  music_controller.ahk toggle-shuffle
   music_controller.ahk get-volume
   music_controller.ahk volume-up 50    (increase by 50% of current volume)
   music_controller.ahk volume-down 25  (decrease by 25% of current volume)
@@ -544,12 +546,15 @@ NOTES:
 - Music commands require internet connection
 - The script will open YouTube Music automatically if needed
 - Use quotes around multi-word search terms
+- toggle-shuffle controls the shuffle mode, not playlist starting
+- toggle uses the last Play/Pause button found (main player controls)
 
 IMPROVEMENTS OVER ORIGINAL:
 - Uses UIAutomation v2 for reliable element detection
 - Multiple fallback methods for robust interaction
 - Better error handling and user feedback
-- More reliable radio/shuffle start functionality
+- Separate commands for playlist control vs player controls
+- Visual debugging with message boxes
     )"
     
     Echo(helpText)
@@ -560,4 +565,33 @@ IMPROVEMENTS OVER ORIGINAL:
 ; ====================================================================
 
 ; Run main function
-Main() 
+Main()
+
+; Toggle shuffle mode in current YouTube Music
+ToggleShuffleMode() {
+    cUIA := GetYouTubeMusicBrowser()
+    if (!cUIA) {
+        throw Error("YouTube Music not found. Use 'play' command first.")
+    }
+    
+    try {
+        ; Find all Shuffle buttons and use the last one (usually the player control)
+        shuffleButtons := cUIA.FindElements({Name: "Shuffle", Type: "Button"})
+        MsgBox("Debug: Found " . shuffleButtons.Length . " Shuffle buttons for toggle", "Toggle Shuffle Debug", 0)
+        
+        if (shuffleButtons.Length > 0) {
+            ; Use the last shuffle button (typically the player control)
+            lastShuffleBtn := shuffleButtons[shuffleButtons.Length]
+            MsgBox("About to toggle shuffle mode using last Shuffle button!", "Toggle Shuffle Action", 0)
+            lastShuffleBtn.Click()
+            MsgBox("Shuffle mode toggled! Check the player.", "Toggle Shuffle Result", 0)
+            Echo("Shuffle mode toggled")
+        } else {
+            throw Error("No Shuffle buttons found")
+        }
+        
+    } catch Error as e {
+        Echo("Error toggling shuffle mode: " . e.message)
+        throw Error("Failed to toggle shuffle mode")
+    }
+} 
