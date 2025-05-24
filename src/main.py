@@ -123,6 +123,8 @@ def run_voice_assistant(settings: AppSettings):
                 if execution_result["success"]:
                     if tool_name == "play_music":
                         app_logger.info("🎵 Music control command executed")
+                    elif tool_name == "music_control":
+                        app_logger.info("🎶 Advanced music control command executed")
                     elif tool_name == "control_volume":
                         app_logger.info("🔊 Volume control command executed")
                     elif tool_name == "system_control":

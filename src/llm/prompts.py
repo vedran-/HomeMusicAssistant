@@ -17,7 +17,11 @@ call the 'unknown_request' tool with a brief explanation.
 
 Examples:
 - If user says "play some music" → call play_music with action="play"
-- If user says "play Boards of Canada" → call play_music with action="play" (can play any artist/song/genre)
+- If user says "play Boards of Canada" → call play_music with action="play", search_term="Boards of Canada"
+- If user says "next song" → call music_control with action="next"
+- If user says "go back 30 seconds" → call music_control with action="back", amount=30
+- If user says "like this song" → call music_control with action="like"
+- If user says "turn on shuffle" → call music_control with action="shuffle"
 - If user says "turn up the volume" → call control_volume with action="up"
 - If user says "put the computer to sleep" → call system_control with action="sleep"
 - If user says "what time is it" → call unknown_request with reason="No tool available for time queries"
@@ -37,7 +41,7 @@ def get_available_tools() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "play_music",
-                "description": "Play any music based on user request - supports artists, songs, genres, albums, movies, or any music-related query. Can also control playback (play, pause, toggle, next, previous).",
+                "description": "Play any music based on user request - supports artists, songs, genres, albums, movies, or any music-related query. Can also control basic playback (play, pause, toggle, next, previous).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -49,6 +53,34 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         "search_term": {
                             "type": "string",
                             "description": "What to play - artist name, song title, genre, album, or any music search term. Only used with 'play' action."
+                        }
+                    },
+                    "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "music_control",
+                "description": "Advanced music control including time navigation, song feedback, and playback modes. Use this for forward/back, like/dislike, shuffle, repeat, and other advanced controls.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": ["forward", "back", "rewind", "like", "dislike", "shuffle", "repeat", "search"],
+                            "description": "The advanced music action to perform"
+                        },
+                        "amount": {
+                            "type": "integer",
+                            "description": "Number of seconds for forward/back actions (default: 10)",
+                            "minimum": 1,
+                            "maximum": 300
+                        },
+                        "search_term": {
+                            "type": "string",
+                            "description": "Search term for music search action"
                         }
                     },
                     "required": ["action"]

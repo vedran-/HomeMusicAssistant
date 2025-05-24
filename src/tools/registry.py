@@ -58,6 +58,8 @@ class ToolRegistry:
         try:
             if tool_name == "play_music":
                 return self._execute_play_music(parameters)
+            elif tool_name == "music_control":
+                return self._execute_music_control(parameters)
             elif tool_name == "control_volume":
                 return self._execute_control_volume(parameters)
             elif tool_name == "system_control":
@@ -123,6 +125,67 @@ class ToolRegistry:
                     "previous": "Playing previous track"
                 }
                 result["feedback"] = feedback_map.get(action, f"Music {action} executed")
+        
+        return result
+
+    def _execute_music_control(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute advanced music control commands."""
+        action = parameters.get("action")
+        amount = parameters.get("amount")
+        search_term = parameters.get("search_term")
+        
+        script_path = self.scripts_dir / "music_controller.ahk"
+        
+        # Map LLM actions to music_controller.ahk commands
+        if action == "forward":
+            command = ["forward"]
+            if amount:
+                command.append(str(amount))
+            feedback = f"Forwarded {amount or 10} seconds"
+            
+        elif action in ["back", "rewind"]:
+            command = ["back"]
+            if amount:
+                command.append(str(amount))
+            feedback = f"Went back {amount or 10} seconds"
+            
+        elif action == "like":
+            command = ["like"]
+            feedback = "Song liked"
+            
+        elif action == "dislike":
+            command = ["dislike"]
+            feedback = "Song disliked"
+            
+        elif action == "shuffle":
+            command = ["toggle-shuffle"]
+            feedback = "Shuffle mode toggled"
+            
+        elif action == "repeat":
+            command = ["repeat"]
+            feedback = "Repeat mode toggled"
+            
+        elif action == "search":
+            if not search_term:
+                return {
+                    "success": False,
+                    "error": "Search term required for search action",
+                    "feedback": "Please specify what to search for"
+                }
+            command = ["search", search_term]
+            feedback = f"Searching for: {search_term}"
+            
+        else:
+            return {
+                "success": False,
+                "error": f"Unknown music control action: {action}",
+                "feedback": f"I don't know how to {action} music"
+            }
+        
+        result = self._run_autohotkey_script(script_path, command)
+        
+        if result["success"]:
+            result["feedback"] = feedback
         
         return result
 

@@ -239,11 +239,26 @@ music_controller.ahk help
 
 The music controller integrates with the Home Assistant Voice Control System. Voice commands are processed through the LLM and mapped to appropriate tool calls:
 
-**Voice Examples:**
-- *"Play some jazz music"* → `play_music` with `search_term: "jazz"`
-- *"Next song"* → `music_control` with `action: "next"`
-- *"Go back 30 seconds"* → `music_control` with `action: "back", "amount": 30`
+**Basic Playback (`play_music` tool)**:
+- *"Play some jazz music"* → `play_music` with `action: "play"`, `search_term: "jazz"`
+- *"Play Boards of Canada"* → `play_music` with `action: "play"`, `search_term: "Boards of Canada"`
+- *"Pause the music"* → `play_music` with `action: "pause"`
+- *"Next song"* → `play_music` with `action: "next"`
+- *"Previous song"* → `play_music` with `action: "previous"`
+
+**Advanced Controls (`music_control` tool)**:
+- *"Go forward 30 seconds"* → `music_control` with `action: "forward"`, `amount: 30`
+- *"Go back 15 seconds"* → `music_control` with `action: "back"`, `amount: 15`
+- *"Like this song"* → `music_control` with `action: "like"`
+- *"Dislike this song"* → `music_control` with `action: "dislike"`
+- *"Turn on shuffle"* → `music_control` with `action: "shuffle"`
+- *"Toggle repeat mode"* → `music_control` with `action: "repeat"`
+- *"Search for electronic music"* → `music_control` with `action: "search"`, `search_term: "electronic music"`
+
+**Volume Control (`control_volume` tool)**:
 - *"Turn up the volume"* → `control_volume` with `action: "up"`
+- *"Turn down the volume"* → `control_volume` with `action: "down"`
+- *"Mute the sound"* → `control_volume` with `action: "mute"`
 
 ## Technical Details
 
