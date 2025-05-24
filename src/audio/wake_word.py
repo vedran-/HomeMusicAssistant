@@ -10,8 +10,8 @@ class WakeWordDetector:
     def __init__(self, settings: AppSettings):
         self.settings = settings
         
-        # Limit to only supported wake word models
-        self.supported_models = ["hey_jarvis", "alexa"]
+        # Limit to only supported wake word models - alexa first as default
+        self.supported_models = ["alexa", "hey_jarvis"]
         self.active_model = None
         
         # Try to ensure the model directory exists

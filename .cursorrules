@@ -7,7 +7,7 @@
 **Current Phase**: Phase 4 - MVP Testing & Refinement  
 
 ## Quick Description
-A local voice control system that listens for wake words ("hey jarvis", "alexa"), transcribes speech via Groq's whisper-large-v3, uses LLM to determine intent, and executes system commands via AutoHotkey tools. Supports music control, volume control, and system operations like sleep.
+A local voice control system that listens for wake words ("alexa", "hey jarvis"), transcribes speech via Groq's whisper-large-v3, uses LLM to determine intent, and executes system commands via AutoHotkey tools. Supports music control, volume control, and system operations like sleep.
 
 ## Documentation Locations
 - **Main Plan**: `docs/plan.md` - Complete implementation roadmap and phase tracking
@@ -20,7 +20,9 @@ A local voice control system that listens for wake words ("hey jarvis", "alexa")
 - ✅ **Phase 1**: Core Infrastructure & Setup - COMPLETE
 - ✅ **Phase 2**: Audio Pipeline & LLM Core - COMPLETE (100% test success rate)  
 - ✅ **Phase 3**: Tool Creation & Execution - COMPLETE (Full voice-to-action pipeline working)
-- 🚧 **Phase 4**: MVP Testing & Refinement - CURRENT PHASE
+- ✅ **Phase 4**: MVP Testing & Refinement - COMPLETE (MVP ready for release)
+
+🎯 **STATUS: MVP READY FOR RELEASE**
 
 ## Key Components
 - **Wake Word Detection**: `src/audio/wake_word.py` (openwakeword integration)

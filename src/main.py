@@ -79,10 +79,10 @@ def run_voice_assistant(settings: AppSettings):
     
     # Main loop
     try:
-        app_logger.info("🎤 Voice control system ready! Say 'hey jarvis' or 'alexa' to activate.")
+        app_logger.info("🎤 Voice control system ready! Say 'alexa' or 'hey jarvis' to activate.")
         
         while True:
-            app_logger.info("Waiting for wake word ('hey jarvis' or 'alexa')...")
+            app_logger.info("Waiting for wake word ('alexa' or 'hey jarvis')...")
             
             # Wait for wake word
             if not wake_detector.listen():
