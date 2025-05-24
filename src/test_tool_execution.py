@@ -73,8 +73,14 @@ class ToolExecutionTester:
             # Step 3: Report results
             if execution_result["success"]:
                 app_logger.info(f"✅ Success: {execution_result['feedback']}")
+                
+                # Make tool output more prominent in console/log (matching main.py)
                 if execution_result.get("output"):
-                    app_logger.info(f"📊 Output: {execution_result['output']}")
+                    app_logger.info("=" * 50)
+                    app_logger.info("🔧 TOOL OUTPUT:")
+                    app_logger.info(f"{execution_result['output']}")
+                    app_logger.info("=" * 50)
+                    
             else:
                 app_logger.error(f"❌ Failed: {execution_result['feedback']}")
                 if execution_result.get("error"):
