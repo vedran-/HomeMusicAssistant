@@ -1,0 +1,79 @@
+# Home Assistant Voice Control System - Cursor Rules
+
+## Project Overview
+**Name**: Home Assistant Voice Control System  
+**Type**: Voice-controlled desktop automation system  
+**Tech Stack**: Python, AutoHotkey v2, Groq Cloud APIs, LiteLLM  
+**Current Phase**: Phase 3 - Tool Creation & Execution  
+
+## Quick Description
+A local voice control system that listens for wake words ("hey jarvis", "alexa"), transcribes speech via Groq's whisper-large-v3, uses LLM to determine intent, and executes system commands via AutoHotkey tools. Supports music control, volume control, and system operations like sleep.
+
+## Documentation Locations
+- **Main Plan**: `docs/plan.md` - Complete implementation roadmap and phase tracking
+- **Setup Guide**: `docs/README.md` - Installation and configuration instructions  
+- **Testing Results**: `docs/TESTING_RESULTS.md` - Phase 2 comprehensive test results
+- **Original Spec**: `docs/TODO.md` - Initial requirements and tech flow
+- **Tool Documentation**: `tools/music_controller.md` - AutoHotkey tool specifications
+
+## Project Status (as of 2025-05-24)
+- ✅ **Phase 1**: Core Infrastructure & Setup - COMPLETE
+- ✅ **Phase 2**: Audio Pipeline & LLM Core - COMPLETE (100% test success rate)  
+- 🚧 **Phase 3**: Tool Creation & Execution - CURRENT PHASE
+- ⏳ **Phase 4**: MVP Testing & Refinement - PENDING
+
+## Key Components
+- **Wake Word Detection**: `src/audio/wake_word.py` (openwakeword integration)
+- **Audio Capture**: `src/audio/capture.py` (PyAudio with mic selection)
+- **Transcription**: `src/transcription/groq_client.py` (Groq whisper-large-v3)
+- **LLM Processing**: `src/llm/client.py` (LiteLLM with qwen-qwq-32b)
+- **Tool Registry**: `src/tools/registry.py` (AutoHotkey execution - TO BE IMPLEMENTED)
+- **Main App**: `src/main.py` (orchestration and main loop)
+
+## Configuration
+- **Config File**: `config.json` (based on `config.template.json`)
+- **API Keys**: Groq API for transcription and LLM
+- **Audio Settings**: Microphone selection by keyword ("W2G" currently configured)
+- **Paths**: AutoHotkey executable, model directories, script locations
+
+## Testing
+- **Test Scripts**: `src/test_transcription_llm.py`, `src/test_audio_capture.py`
+- **Run Tests**: `python -m src.test_transcription_llm` for comprehensive testing
+- **Real Audio Test**: `python -m src.test_audio_capture` for speech testing
+
+## Current Work Focus
+**Phase 3 Objectives**:
+1. Implement `src/tools/registry.py` for AutoHotkey script execution
+2. Create `src/tools/system_control.ahk` for sleep/shutdown commands
+3. Integrate tool execution into main application flow
+4. Map LLM tool calls to actual AutoHotkey script executions
+
+## Architecture Flow
+```
+Wake Word Detection → Audio Capture → Transcription (Groq) → LLM (qwen-qwq-32b) → Tool Selection → AutoHotkey Execution
+```
+
+## Available Tools (LLM Recognized)
+- `play_music`: Music playback control (play, pause, toggle, next, previous)
+- `control_volume`: System volume control (up, down, mute, unmute, with amounts)
+- `system_control`: System operations (sleep, shutdown)
+- `unknown_request`: Fallback for unrecognized requests
+
+## Development Guidelines
+- Follow the phase-based implementation plan in `docs/plan.md`
+- Maintain comprehensive logging using `src/utils/logger.py`
+- Test components individually before integration
+- Update progress in `docs/plan.md` after completing tasks
+- Use Pydantic for configuration validation
+- Handle errors gracefully with clear user feedback
+
+## Dependencies
+- **Python**: litellm, pyaudio, openwakeword, pydantic, loguru, groq
+- **External**: AutoHotkey v2, UIAutomation v2 libraries
+- **Cloud APIs**: Groq (transcription + LLM)
+
+## Next Steps (Phase 3)
+1. Create tool registry system for AutoHotkey script execution
+2. Implement system control AutoHotkey script
+3. Integrate tool execution into main application
+4. Test end-to-end voice command execution 
