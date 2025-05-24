@@ -345,12 +345,11 @@ SearchMusic(searchTerm) {
 
 ; Get current system volume and print to stdout
 GetVolume() {
-    try {
-        currentVolume := SoundGetVolume()
-        Echo(Round(currentVolume))
-    } catch Error as e {
-        throw Error("Failed to get volume: " . e.message)
-    }
+    currentVolume := SoundGetVolume()
+    volumeValue := Round(currentVolume)
+    
+    ; Use cmd echo for simple, reliable output
+    RunWait('cmd /c echo ' . volumeValue, , "")
 }
 
 ; Adjust system volume by relative percentage
@@ -367,14 +366,19 @@ AdjustVolume(percentage) {
         ; Apply change to actual current volume
         newVolume := currentVolume + changeAmount
         
-        ; Clamp between 0 and 100
+        ; Clamp between 1 and 100 (1% absolute minimum)
         if (newVolume > 100) {
             newVolume := 100
-        } else if (newVolume < 0) {
-            newVolume := 0
+        } else if (newVolume < 1) {
+            newVolume := 1
         }
         
         SoundSetVolume(newVolume)
+        
+        ; Output new volume to stdout for automation systems
+        RunWait('cmd /c echo ' . Round(newVolume), , "")
+        
+        ; Also echo human-readable message
         Echo("Volume: " . Round(newVolume) . "% (changed by " . Round(changeAmount, 1) . "%)")
         
     } catch Error as e {
@@ -460,14 +464,11 @@ GetYouTubeMusicBrowser() {
 ; Echo message to stdout (visible when run from command line)
 Echo(message) {
     try {
-        FileAppend(message . "`n", "*")  ; "*" means stdout in AHK v2
+        ; Method 1: Try direct FileAppend to stdout
+        FileAppend(message . "`n", "*")
     } catch {
-        ; If stdout is not available (no console), silently continue
-        ; This happens when script is run by double-clicking or from GUI
-        ; For help text, we'll show a message box instead
-        if (InStr(message, "USAGE:") > 0) {
-            MsgBox(message, "YouTube Music Controller Help", "OK")
-        }
+        ; Method 2: Use cmd to echo the message directly to console
+        RunWait('cmd /c echo ' . message, , "")
     }
 }
 
