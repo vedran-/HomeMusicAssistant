@@ -187,21 +187,40 @@ SearchMusicUIA(cUIA, searchTerm) {
         }
         
         if (searchBox) {
-            ; Clear existing content and type search term
+            ; Clear existing content and type search term - Enhanced clearing
             searchBox.SetFocus()
             Sleep(200)
-            searchBox.SetValue("")
+            
+            ; Multiple clearing attempts to ensure empty search box
+            searchBox.SetValue("")  ; Try direct clearing first
+            Sleep(100)
+            cUIA.Send("^a")  ; Select all
+            Sleep(100)
+            cUIA.Send("{Delete}")  ; Delete selected content
+            Sleep(100)
+            cUIA.Send("^a")  ; Select again in case anything remains
+            Sleep(100)
+            cUIA.Send("{Backspace}")  ; Backspace as additional clearing
             Sleep(200)
+            
+            ; Now enter the search term
             searchBox.SetValue(searchTerm)
             Sleep(500)
             
             ; Press Enter to search
             cUIA.Send("{Enter}")
         } else {
-            ; Fallback: Use global search hotkey and type
+            ; Fallback: Use global search hotkey and type - Enhanced clearing
             cUIA.Send("/")
             Sleep(300)
+            ; Multiple clearing attempts for keyboard fallback
             cUIA.Send("^a")  ; Select all
+            Sleep(100)
+            cUIA.Send("{Delete}")  ; Delete
+            Sleep(100)
+            cUIA.Send("^a")  ; Select all again
+            Sleep(100)
+            cUIA.Send("{Backspace}")  ; Backspace
             Sleep(100)
             cUIA.Send(searchTerm)
             Sleep(300)
@@ -213,10 +232,17 @@ SearchMusicUIA(cUIA, searchTerm) {
         
     } catch Error as e {
         Echo("Search error: " . e.message . " - Using keyboard fallback")
-        ; Fallback to original keyboard method
+        ; Fallback to original keyboard method with enhanced clearing
         cUIA.Send("/")
         Sleep(300)
-        cUIA.Send("^a")
+        ; Enhanced clearing for error fallback
+        cUIA.Send("^a")  ; Select all
+        Sleep(100)
+        cUIA.Send("{Delete}")  ; Delete
+        Sleep(100)
+        cUIA.Send("^a")  ; Select all again  
+        Sleep(100)
+        cUIA.Send("{Backspace}")  ; Backspace
         Sleep(100)
         cUIA.Send(searchTerm)
         Sleep(300)
@@ -231,95 +257,97 @@ StartRadioUIA(cUIA) {
     
     try {
         ; Wait for search results to load
-        Sleep(1500)
+        Sleep(2000)
         
-        ; Method 1: Look for "Start Radio" button
-        radioBtn := ""
+        ; Debug: Show total button count
         try {
-            radioBtn := cUIA.FindElement({Name: "Start radio", Type: "Button"})
+            allButtons := cUIA.FindElements({Type: "Button"})
+            MsgBox("Debug: Found " . allButtons.Length . " total buttons on page", "Button Count", 0)
         } catch {
-            try {
-                radioBtn := cUIA.FindElement({Name: "Radio", Type: "Button"})
-            } catch {
-                try {
-                    radioBtn := cUIA.FindElement({Name: "Start Radio", Type: "Button"})
-                } catch {
-                    ; Try finding shuffle button
-                    try {
-                        radioBtn := cUIA.FindElement({Name: "Shuffle", Type: "Button"})
-                    } catch {
-                        try {
-                            radioBtn := cUIA.FindElement({Name: "Shuffle play", Type: "Button"})
-                        }
-                    }
-                }
-            }
+            MsgBox("Debug: Could not count buttons", "Error", 0)
         }
         
-        if (radioBtn) {
-            radioBtn.Click()
-            Echo("Radio started successfully")
-            return
-        }
-        
-        ; Method 2: Look for play buttons on search results
+        ; Method 1: Look for Radio button (highest priority)
+        radioButtons := ""
         try {
-            playButtons := cUIA.FindElements({Name: "Play", Type: "Button"})
-            if (playButtons.Length > 0) {
-                ; Click the first play button found
-                playButtons[1].Click()
-                Echo("Started playing first result")
+            radioButtons := cUIA.FindElements({Name: "Radio", Type: "Button"})
+            MsgBox("Debug: Found " . radioButtons.Length . " Radio buttons", "Radio Button Search", 0)
+            
+            if (radioButtons.Length > 0) {
+                Echo("Found Radio button - clicking...")
+                MsgBox("About to click Radio button!", "Action", 0)
+                radioButtons[1].Click()
+                Sleep(1000)
+                MsgBox("Radio button clicked! Check if music started.", "Result", 0)
+                Echo("✅ Radio started successfully")
                 return
             }
+        } catch Error as e {
+            MsgBox("Radio button search failed: " . e.message, "Radio Error", 0)
+            Echo("Radio button not found")
         }
         
-        ; Method 3: Try to find and click first song/album in results
+        ; Method 2: Look for Shuffle button (second priority)
+        shuffleButtons := ""
         try {
-            ; Look for clickable music items
-            musicItems := cUIA.FindElements({Type: "ListItem"})
-            if (musicItems.Length > 0) {
-                musicItems[1].Click()
-                Sleep(500)
-                
-                ; Now try to find play button in the opened item
-                try {
-                    itemPlayBtn := cUIA.FindElement({Name: "Play", Type: "Button"})
-                    itemPlayBtn.Click()
-                    Echo("Started playing selected item")
-                    return
-                } catch {
-                    ; Try shuffle if available
-                    try {
-                        shuffleBtn := cUIA.FindElement({Name: "Shuffle", Type: "Button"})
-                        shuffleBtn.Click()
-                        Echo("Started shuffle play")
-                        return
-                    }
-                }
+            shuffleButtons := cUIA.FindElements({Name: "Shuffle", Type: "Button"})
+            MsgBox("Debug: Found " . shuffleButtons.Length . " Shuffle buttons", "Shuffle Button Search", 0)
+            
+            if (shuffleButtons.Length > 0) {
+                Echo("Found Shuffle button - clicking...")
+                MsgBox("About to click Shuffle button!", "Action", 0)
+                shuffleButtons[1].Click()
+                Sleep(1000)
+                MsgBox("Shuffle button clicked! Check if music started.", "Result", 0)
+                Echo("✅ Shuffle started successfully")
+                return
             }
+        } catch Error as e {
+            MsgBox("Shuffle button search failed: " . e.message, "Shuffle Error", 0)
+            Echo("Shuffle button not found")
         }
         
-        ; Method 4: Try keyboard shortcuts as fallback
-        Echo("Using keyboard fallback to start radio...")
-        ; Try some common keyboard shortcuts for play/shuffle
-        cUIA.Send("{Space}")  ; Space often plays/pauses
-        Sleep(500)
+        ; Method 3: Look for any Play button (third priority)
+        playButtons := ""
+        try {
+            playButtons := cUIA.FindElements({Name: "Play", Type: "Button"})
+            MsgBox("Debug: Found " . playButtons.Length . " Play buttons", "Play Button Search", 0)
+            
+            if (playButtons.Length > 0) {
+                Echo("Found " . playButtons.Length . " Play buttons - clicking first one...")
+                MsgBox("About to click first Play button!", "Action", 0)
+                playButtons[1].Click()
+                Sleep(1000)
+                MsgBox("Play button clicked! Check if music started.", "Result", 0)
+                Echo("✅ Play started successfully")
+                return
+            }
+        } catch Error as e {
+            MsgBox("Play button search failed: " . e.message, "Play Error", 0)
+            Echo("Play buttons not found")
+        }
         
-        Echo("Attempted to start radio - verify manually if needed")
+        ; Method 4: Keyboard fallback
+        Echo("Trying keyboard shortcuts...")
+        MsgBox("No buttons found. Trying keyboard shortcut (Space).", "Fallback", 0)
+        cUIA.Send("{Space}")  ; Space to play
+        Sleep(1000)
+        MsgBox("Keyboard shortcut attempted. Check if music started.", "Keyboard Result", 0)
+        Echo("Keyboard shortcut attempted")
         
     } catch Error as e {
-        Echo("Radio start error: " . e.message . " - Using keyboard fallback")
-        ; Final fallback to keyboard navigation
-        Loop 10 {
-            cUIA.Send("{Tab}")
-            Sleep(150)
-            
-            if (A_Index = 3 || A_Index = 5 || A_Index = 7) {
-                cUIA.Send("{Enter}")
-                Sleep(300)
-            }
+        MsgBox("Error in StartRadioUIA: " . e.message, "Fatal Error", 0)
+        Echo("Error in StartRadioUIA: " . e.message)
+        ; Final keyboard fallback
+        try {
+            cUIA.Send("{Enter}")
+            Sleep(500)
+            MsgBox("Emergency Enter key pressed.", "Emergency Fallback", 0)
+            Echo("Emergency keyboard fallback used")
+        } catch {
+            MsgBox("All methods failed!", "Complete Failure", 0)
+            Echo("All methods failed")
         }
-        Echo("Used keyboard fallback for radio start")
     }
 }
 
