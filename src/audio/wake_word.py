@@ -10,7 +10,7 @@ class WakeWordDetector:
     def __init__(self, settings: AppSettings):
         self.settings = settings
         
-        # Supported wake word models
+        # Limit to only supported wake word models
         self.supported_models = ["hey_jarvis", "alexa"]
         self.active_model = None
         
@@ -82,6 +82,9 @@ class WakeWordDetector:
     def listen(self) -> bool:
         app_logger.info(f"Initializing audio stream for wake word detection (mic_idx: {self.settings.audio_settings.input_device_index or 'default'}, sample_rate: {self.sample_rate} Hz)...")
         try:
+            # Ensure any previous stream is closed
+            self.stop_listening()
+            
             self.stream = self.pa.open(
                 format=pyaudio.paInt16,
                 channels=1,
@@ -93,7 +96,7 @@ class WakeWordDetector:
             app_logger.info(f"Listening for wake word '{self.active_model}'...")
 
             while True:
-                audio_chunk = self.stream.read(self.chunk_size)
+                audio_chunk = self.stream.read(self.chunk_size, exception_on_overflow=False)
                 
                 # Convert the audio bytes to the right format
                 audio_np = np.frombuffer(audio_chunk, dtype=np.int16)
@@ -105,17 +108,14 @@ class WakeWordDetector:
                 if self.active_model in prediction and prediction[self.active_model] > self.sensitivity:
                     app_logger.info(f"Wake word '{self.active_model}' detected with score {prediction[self.active_model]:.2f}!")
                     self.stop_listening()
+                    # Add a small delay to prevent immediate re-triggering
+                    time.sleep(0.5)
                     return True
 
         except Exception as e:
             app_logger.error(f"Error during wake word detection: {e}")
-            if self.stream:
-                self.stream.stop_stream()
-                self.stream.close()
-            self.stream = None
-            return False
-        finally:
             self.stop_listening()
+            return False
 
     def stop_listening(self):
         if self.stream:
@@ -123,6 +123,7 @@ class WakeWordDetector:
                 if self.stream.is_active():
                     self.stream.stop_stream()
                 self.stream.close()
+                self.stream = None
             except Exception as e:
                 app_logger.error(f"Error stopping wake word audio stream: {e}")
             finally:
@@ -130,6 +131,7 @@ class WakeWordDetector:
 
     def __del__(self):
         # Clean up PyAudio instance when the detector is garbage collected
+        self.stop_listening()
         if hasattr(self, 'pa') and self.pa:
             try:
                 self.pa.terminate()
