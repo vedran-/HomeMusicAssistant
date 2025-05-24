@@ -92,14 +92,14 @@ music_controller.ahk get-volume
 Increases volume by relative percentage of current volume.
 
 **Parameters:**
-- `percentage` (optional): Percentage increase relative to current volume. Default: 10
+- `percentage` (optional): Percentage increase relative to current volume. Default: 100
 
 **Output:** New volume level to stdout
 
 **Examples:**
 ```bash
-music_controller.ahk volume-up        # Increase by 10% of current
-music_controller.ahk volume-up 50     # Increase by 50% of current
+music_controller.ahk volume-up        # Increase by 100% of current
+music_controller.ahk volume-up 250     # Increase by 250% of current
 ```
 
 **Calculation Logic:**
@@ -112,13 +112,14 @@ music_controller.ahk volume-up 50     # Increase by 50% of current
 Decreases volume by relative percentage of current volume.
 
 **Parameters:**
-- `percentage` (optional): Percentage decrease relative to current volume. Default: 10
+- `percentage` (optional): Percentage decrease relative to current volume. Default: 50
 
 **Output:** New volume level to stdout
 
 **Examples:**
 ```bash
-music_controller.ahk volume-down      # Decrease by 10% of current
+music_controller.ahk volume-up        # Increase by 100% of current
+music_controller.ahk volume-down      # Decrease by 50% of current
 music_controller.ahk volume-down 25   # Decrease by 25% of current
 ```
 

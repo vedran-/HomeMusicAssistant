@@ -48,11 +48,11 @@ Main() {
                 Echo("System unmuted")
             
             case "volume-up":
-                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 100
                 AdjustVolume(amount)
             
             case "volume-down":
-                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 50
                 AdjustVolume(-amount)
             
             case "get-volume":
