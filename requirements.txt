@@ -3,4 +3,5 @@ pyaudio
 openwakeword
 pydantic
 python-dotenv
-loguru 
+loguru
+groq 

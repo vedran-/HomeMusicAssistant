@@ -99,32 +99,32 @@ HomeAssistant/
 **Objective**: Implement wake word detection, audio capture with microphone selection, transcription, and initial LLM processing.
 
 **Tasks**:
-- [ ] **Wake Word Detection (`src/audio/wake_word.py`)**:
-    - [ ] Integrate `openwakeword` as a direct Python library/process.
-    - [ ] Load "hey jarvis" model (models downloaded by `openwakeword` to path in `config.json`).
-    - [ ] Implement a function/class to start listening and yield a boolean upon wake word detection.
-- [ ] **Audio Capture (`src/audio/capture.py`)**:
-    - [ ] Implement microphone listing using PyAudio to get available input devices.
-    - [ ] Allow selection of the microphone via `config.json` (device index).
-    - [ ] Implement real-time audio capture after wake word.
-    - [ ] Implement silence detection to determine end of speech.
-    - [ ] Prepare audio data (e.g., WAV format) for transcription.
-- [ ] **Transcription (`src/transcription/groq_client.py`)**:
-    - [ ] Implement client for Groq Cloud's whisper-large-v3 API.
-    - [ ] Send captured audio for transcription.
-    - [ ] Handle API responses and errors.
-- [ ] **LLM Integration (`src/llm/`)**:
-    - [ ] Implement `client.py` for LiteLLM:
-        - [ ] Load API keys and model configuration from settings.
-        - [ ] Function to send transcription and prompt to LLM.
-    - [ ] Develop `prompts.py`:
-        - [ ] Create a system prompt that instructs the LLM on its role.
-        - [ ] Define available tools (initially `music_controller.ahk` functions, and a placeholder for `system_control.ahk`).
-        - [ ] Provide examples of how to format the output for tool calls (e.g., JSON with `tool_name` and `parameters`).
-- [ ] **Main Orchestration (Initial) (`src/main.py`)**:
-    - [ ] Create `src/audio/__init__.py`, `src/transcription/__init__.py`, `src/llm/__init__.py`.
-    - [ ] Wire together: Wake Word -> Audio Capture -> Transcription -> LLM.
-    - [ ] Print LLM response (tool call request) to console using `app_logger`.
+- [X] **Wake Word Detection (`src/audio/wake_word.py`)**:
+    - [X] Integrate `openwakeword` as a direct Python library/process.
+    - [X] Load "hey jarvis" model (models downloaded by `openwakeword` to path in `config.json`).
+    - [X] Implement a function/class to start listening and yield a boolean upon wake word detection.
+- [X] **Audio Capture (`src/audio/capture.py`)**:
+    - [X] Implement microphone listing using PyAudio to get available input devices.
+    - [X] Allow selection of the microphone via `config.json` (device index).
+    - [X] Implement real-time audio capture after wake word.
+    - [X] Implement silence detection to determine end of speech.
+    - [X] Prepare audio data (e.g., WAV format) for transcription.
+- [X] **Transcription (`src/transcription/groq_client.py`)**:
+    - [X] Implement client for Groq Cloud's whisper-large-v3 API.
+    - [X] Send captured audio for transcription.
+    - [X] Handle API responses and errors.
+- [X] **LLM Integration (`src/llm/`)**:
+    - [X] Implement `client.py` for LiteLLM:
+        - [X] Load API keys and model configuration from settings.
+        - [X] Function to send transcription and prompt to LLM.
+    - [X] Develop `prompts.py`:
+        - [X] Create a system prompt that instructs the LLM on its role.
+        - [X] Define available tools (initially `music_controller.ahk` functions, and a placeholder for `system_control.ahk`).
+        - [X] Provide examples of how to format the output for tool calls (e.g., JSON with `tool_name` and `parameters`).
+- [X] **Main Orchestration (Initial) (`src/main.py`)**:
+    - [X] Create `src/audio/__init__.py`, `src/transcription/__init__.py`, `src/llm/__init__.py`.
+    - [X] Wire together: Wake Word -> Audio Capture -> Transcription -> LLM.
+    - [X] Print LLM response (tool call request) to console using `app_logger`.
 
 ### Phase 3: Tool Creation & Execution
 **Objective**: Integrate the existing music tool and create the system control tool, enabling the LLM to execute them.
