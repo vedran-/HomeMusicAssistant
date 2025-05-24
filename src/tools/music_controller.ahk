@@ -1,4 +1,5 @@
 #Requires AutoHotkey v2.0
+#SingleInstance Force
 
 ; Include UIAutomation libraries
 #include Lib\UIA.ahk
@@ -13,18 +14,12 @@ YOUTUBE_MUSIC_URL := "https://music.youtube.com"
 ; ====================================================================
 
 Main() {
-    ; Write to log file immediately
-    FileAppend("SCRIPT STARTED: " . A_Now . "`n", "music_controller_debug.log")
-    FileAppend("Arguments received: " . A_Args.Length . "`n", "music_controller_debug.log")
-    
     if (A_Args.Length = 0) {
-        FileAppend("No arguments provided, showing help`n", "music_controller_debug.log")
         ShowHelp()
         ExitApp()
     }
     
     command := A_Args[1]
-    FileAppend("Command: " . command . "`n", "music_controller_debug.log")
     
     try {
         switch command {
@@ -174,48 +169,50 @@ TogglePlayback() {
 
 ; Search for music in YouTube Music using UIAutomation
 SearchMusicUIA(cUIA, searchTerm) {
-    Echo("=== SEARCHING FOR MUSIC: " . searchTerm . " ===")
+    Echo("Searching for: " . searchTerm)
     
     try {
         Sleep(200)
         
-        ; Use unified search box finder
+        ; Find and use search box
         searchBox := FindYouTubeMusicSearchBox(cUIA)
         
         if (searchBox) {
-            Echo("✅ Search box found! Proceeding with search...")
-            
             ; Clear the search box
-            if (ClearSearchBox(cUIA)) {
-                Echo("✅ Search box cleared successfully")
-            } else {
-                Echo("⚠️ Search box clearing failed, but continuing...")
-            }
+            ClearSearchBox(cUIA)
             
-            ; Focus and enter search term
+            ; Ensure proper focus before text input
             try {
                 searchBox.SetFocus()
+                Sleep(300)  ; Longer wait for focus to settle
+                
+                ; Verify focus by clicking on the element
+                searchBox.Click()
                 Sleep(200)
-                Echo("Focus set on search box")
             } catch {
-                Echo("Could not set focus, but continuing...")
+                Echo("Focus/click failed, but continuing...")
             }
             
             ; Enter search term using clipboard method
             if (SendTextViaClipboard(cUIA, searchTerm)) {
-                Echo("✅ Search term entered via clipboard method")
+                Echo("Search term entered via clipboard method")
             } else {
                 Echo("Clipboard method failed, using direct typing")
+                ; Fallback: try to set focus again before direct typing
+                try {
+                    searchBox.SetFocus()
+                    Sleep(200)
+                }
                 cUIA.Send(searchTerm)
             }
             Sleep(200)
             
             ; Submit search
             cUIA.Send("{Enter}")
-            Echo("✅ Search submitted successfully")
+            Echo("Search submitted successfully")
             
         } else {
-            Echo("❌ No search box found, using keyboard fallback")
+            Echo("Search box not found, using keyboard fallback")
             
             ; Keyboard fallback: Escape → "/" → type → Enter
             cUIA.Send("{Escape}")
@@ -236,10 +233,9 @@ SearchMusicUIA(cUIA, searchTerm) {
         
         ; Wait for search results
         Sleep(2000)
-        Echo("=== SEARCH PROCESS COMPLETED ===")
         
     } catch Error as e {
-        Echo("❌ SEARCH ERROR: " . e.message . " - Using emergency fallback")
+        Echo("Search error: " . e.message . " - Using emergency fallback")
         
         ; Emergency keyboard fallback
         cUIA.Send("{Escape}")
@@ -256,209 +252,83 @@ SearchMusicUIA(cUIA, searchTerm) {
         Sleep(300)
         cUIA.Send("{Enter}")
         Sleep(1500)
-        Echo("Emergency fallback completed")
     }
 }
 
-; Unified function to find YouTube Music search box - tests multiple methods
+; Find YouTube Music search box using the working ComboBox method
 FindYouTubeMusicSearchBox(cUIA) {
-    Echo("=== SEARCHING FOR YOUTUBE MUSIC SEARCH BOX ===")
-    
-    ; Test Method 1: AutomationId "input"
-    Echo("TEST 1: Trying AutomationId 'input'...")
     try {
-        searchBox := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
-        Echo("✅ TEST 1 SUCCESS: Found element with AutomationId 'input'")
-        return searchBox
-    } catch {
-        Echo("❌ TEST 1 FAILED: AutomationId 'input' not found")
-    }
-    
-    ; Test Method 2: Placeholder text
-    Echo("TEST 2: Trying placeholder text 'Search songs, albums, artists, podcasts'...")
-    try {
-        searchBox := cUIA.FindElement({Type: "Edit", Name: "Search songs, albums, artists, podcasts"})
-        Echo("✅ TEST 2 SUCCESS: Found element with placeholder text")
-        return searchBox
-    } catch {
-        Echo("❌ TEST 2 FAILED: Placeholder text not found")
-    }
-    
-    ; Test Method 3: Role combobox (from HTML: role="combobox")
-    Echo("TEST 3: Trying role combobox...")
-    try {
+        ; Use ComboBox type - this works with YouTube Music's role="combobox" search box
         searchBox := cUIA.FindElement({Type: "ComboBox"})
-        Echo("✅ TEST 3 SUCCESS: Found ComboBox element")
         return searchBox
     } catch {
-        Echo("❌ TEST 3 FAILED: ComboBox not found")
+        return false
     }
-    
-    ; Test Method 4: Look for elements with "search" in name (case insensitive)
-    Echo("TEST 4: Looking for elements with 'search' in name...")
-    try {
-        allElements := cUIA.FindElements({Type: "Edit"})
-        for element in allElements {
-            try {
-                name := element.Name
-                if (InStr(name, "search") || InStr(name, "Search")) {
-                    Echo("✅ TEST 4 SUCCESS: Found Edit element with 'search' in name: '" . name . "'")
-                    return element
-                }
-            }
-        }
-        Echo("❌ TEST 4 FAILED: No Edit elements with 'search' in name")
-    } catch {
-        Echo("❌ TEST 4 ERROR: Could not enumerate Edit elements")
-    }
-    
-    ; Test Method 5: List all available Edit elements for analysis
-    Echo("TEST 5: Listing ALL Edit elements for analysis...")
-    try {
-        allEdits := cUIA.FindElements({Type: "Edit"})
-        Echo("Found " . allEdits.Length . " Edit elements:")
-        
-        maxElements := Min(allEdits.Length, 10)
-        Loop maxElements {
-            try {
-                element := allEdits[A_Index]
-                name := ""
-                automationId := ""
-                className := ""
-                
-                try { 
-                    name := element.Name 
-                } catch { 
-                    name := "(no name)" 
-                }
-                try { 
-                    automationId := element.AutomationId 
-                } catch { 
-                    automationId := "(no id)" 
-                }
-                try { 
-                    className := element.ClassName 
-                } catch { 
-                    className := "(no class)" 
-                }
-                
-                Echo("  " . A_Index . ". Name: '" . name . "' | AutomationId: '" . automationId . "' | Class: '" . className . "'")
-            } catch {
-                Echo("  " . A_Index . ". (error reading element)")
-            }
-        }
-    } catch {
-        Echo("❌ TEST 5 ERROR: Could not enumerate Edit elements")
-    }
-    
-    ; Test Method 6: Try different element types
-    Echo("TEST 6: Trying different element types...")
-    elementTypes := ["TextBox", "Document", "Pane", "Group"]
-    for typeName in elementTypes {
-        Echo("  Testing type: " . typeName)
-        try {
-            elements := cUIA.FindElements({Type: typeName})
-            Echo("    Found " . elements.Length . " " . typeName . " elements")
-            
-            ; Look for search-related elements in this type
-            for element in elements {
-                try {
-                    name := element.Name
-                    if (InStr(name, "search") || InStr(name, "Search")) {
-                        Echo("✅ TEST 6 SUCCESS: Found " . typeName . " with 'search' in name: '" . name . "'")
-                        return element
-                    }
-                }
-            }
-        } catch {
-            Echo("    Error getting " . typeName . " elements")
-        }
-    }
-    Echo("❌ TEST 6 FAILED: No search elements found in alternative types")
-    
-    Echo("❌ ALL TESTS FAILED: Could not find YouTube Music search box")
-    return false
 }
 
-; Simple search box clearing using unified finder
+; Clear YouTube Music search box (simplified - clearing now handled in SendTextViaClipboard)
 ClearSearchBox(cUIA) {
-    Echo("=== CLEARING SEARCH BOX ===")
-    
-    ; Use unified finder
+    ; Find search box and focus it
     searchInput := FindYouTubeMusicSearchBox(cUIA)
     if (!searchInput) {
-        Echo("❌ CLEAR FAILED: Could not find search box")
         return false
     }
     
     try {
-        ; Focus on search box
-        Echo("Setting focus on search box...")
+        ; Just focus - text replacement handled in clipboard function
         searchInput.SetFocus()
-        Sleep(300)
-        Echo("✅ Focus set successfully")
-        
-        ; Get current value
-        currentValue := ""
-        try {
-            currentValue := searchInput.GetValue()
-            Echo("Current value: '" . currentValue . "'")
-        } catch {
-            Echo("Could not get current value")
-        }
-        
-        ; Clear using Ctrl+A + Delete
-        Echo("Sending Ctrl+A...")
-        cUIA.Send("^a")
         Sleep(200)
-        
-        Echo("Sending Delete...")
-        cUIA.Send("{Delete}")
-        Sleep(200)
-        
-        ; Check if it worked
-        try {
-            newValue := searchInput.GetValue()
-            Echo("After clearing: '" . newValue . "'")
-            
-            if (!newValue || newValue = "" || StrLen(Trim(newValue)) = 0) {
-                Echo("✅ CLEAR SUCCESS: Search box is empty")
-                return true
-            } else {
-                Echo("❌ CLEAR FAILED: Search box still contains: '" . newValue . "'")
-                return false
-            }
-        } catch {
-            Echo("Could not verify clearing result")
-            return false
-        }
-        
-    } catch Error as e {
-        Echo("❌ CLEAR ERROR: " . e.message)
+        return true
+    } catch {
         return false
     }
 }
 
-; Send text using clipboard method to avoid capitalization issues
+; Send text using robust clipboard method with automatic text replacement
 SendTextViaClipboard(cUIA, text) {
     try {
         ; Store original clipboard content
         originalClipboard := A_Clipboard
         
-        ; Set clipboard to our text
+        ; Set clipboard to our text and wait for it to be ready
+        A_Clipboard := ""  ; Clear clipboard first
+        Sleep(50)
         A_Clipboard := text
-        Sleep(100)  ; Wait for clipboard to be set
         
-        ; Paste the text
-        cUIA.Send("^v")
-        Sleep(200)  ; Wait for paste to complete
+        ; Wait for clipboard to contain our text (up to 1 second)
+        if (!ClipWait(1)) {
+            Echo("Clipboard operation timed out")
+            A_Clipboard := originalClipboard
+            return false
+        }
+        
+        ; Verify clipboard contains what we expect
+        if (A_Clipboard != text) {
+            Echo("Clipboard verification failed")
+            A_Clipboard := originalClipboard
+            return false
+        }
+        
+        ; Select all existing text first, then paste to replace
+        Sleep(100)
+        cUIA.Send("{Ctrl down}a{Ctrl up}")
+        Sleep(100)
+        
+        ; Paste using explicit Ctrl+V 
+        cUIA.Send("{Ctrl down}v{Ctrl up}")
+        Sleep(300)  ; Wait for paste to complete
         
         ; Restore original clipboard
+        Sleep(100)
         A_Clipboard := originalClipboard
         
         return true
     } catch Error as e {
         Echo("Error sending text via clipboard: " . e.message)
+        ; Restore clipboard on error
+        try {
+            A_Clipboard := originalClipboard
+        }
         return false
     }
 }
@@ -682,19 +552,13 @@ GetYouTubeMusicBrowser() {
 ; UTILITY FUNCTIONS
 ; ====================================================================
 
-; Echo message to stdout AND log file for debugging
+; Echo message to stdout
 Echo(message) {
-    ; Write to log file for debugging
     try {
-        FileAppend(message . "`n", "music_controller_debug.log")
-    }
-    
-    ; Also try console output
-    try {
-        ; Method 1: Try direct FileAppend to stdout
+        ; Try direct FileAppend to stdout
         FileAppend(message . "`n", "*")
     } catch {
-        ; Method 2: Use cmd to echo the message directly to console
+        ; Use cmd to echo the message directly to console
         RunWait('cmd /c echo ' . message, , "")
     }
 }
