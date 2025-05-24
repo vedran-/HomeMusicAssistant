@@ -4,4 +4,5 @@ openwakeword
 pydantic
 python-dotenv
 loguru
-groq 
+groq
+pygame 

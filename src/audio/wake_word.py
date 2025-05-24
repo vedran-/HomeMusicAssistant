@@ -5,6 +5,7 @@ import os
 import numpy as np
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
+from src.utils.audio_effects import play_wake_word_accepted_sound
 
 class WakeWordDetector:
     def __init__(self, settings: AppSettings):
@@ -216,6 +217,8 @@ class WakeWordDetector:
                     app_logger.debug(f"Wake word cooldown period: {cooldown_time}s")
                     time.sleep(cooldown_time)
                     chunks_to_skip = 7
+                    
+                    play_wake_word_accepted_sound()
                     
                     return True
 

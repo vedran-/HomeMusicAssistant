@@ -49,8 +49,14 @@ def execute_tool_call(tool_registry: ToolRegistry, tool_call: Dict[str, Any]):
         # Log the result
         if result["success"]:
             app_logger.info(f"✅ {result['feedback']}")
+            
+            # Make tool output more prominent in console/log
             if result.get("output"):
-                app_logger.info(f"📊 Output: {result['output']}")
+                app_logger.info("=" * 50)
+                app_logger.info("🔧 TOOL OUTPUT:")
+                app_logger.info(f"{result['output']}")
+                app_logger.info("=" * 50)
+            
         else:
             app_logger.error(f"❌ Tool execution failed: {result['feedback']}")
             if result.get("error"):

@@ -24,7 +24,6 @@ Examples:
 - If user says "play rock music" → call play_music with action="play", search_term="rock music"
 - If user says "play that song from the movie" → call play_music with action="play", search_term="that song from the movie"
 - If user says "play anything" → call play_music with action="play", search_term="anything"
-- If user says "play jazz" → call play_music with action="play", search_term="jazz"
 - If user says "play The Beatles" → call play_music with action="play", search_term="The Beatles"
 - If user says "next song" → call music_control with action="next"
 - If user says "go back 30 seconds" → call music_control with action="back", amount=30
