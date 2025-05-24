@@ -55,6 +55,9 @@ Main() {
                 amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
                 AdjustVolume(-amount)
             
+            case "get-volume":
+                GetVolume()
+            
             case "help":
                 ShowHelp()
             
@@ -340,11 +343,29 @@ SearchMusic(searchTerm) {
 ; SYSTEM VOLUME FUNCTIONS
 ; ====================================================================
 
-; Adjust system volume by specified amount
-AdjustVolume(amount) {
+; Get current system volume and print to stdout
+GetVolume() {
     try {
         currentVolume := SoundGetVolume()
-        newVolume := currentVolume + amount
+        Echo(Round(currentVolume))
+    } catch Error as e {
+        throw Error("Failed to get volume: " . e.message)
+    }
+}
+
+; Adjust system volume by relative percentage
+AdjustVolume(percentage) {
+    try {
+        currentVolume := SoundGetVolume()
+        
+        ; Use minimum 1% for calculation base if current volume is lower
+        calculationBase := Max(currentVolume, 1)
+        
+        ; Calculate the change amount based on percentage of calculation base
+        changeAmount := calculationBase * (percentage / 100)
+        
+        ; Apply change to actual current volume
+        newVolume := currentVolume + changeAmount
         
         ; Clamp between 0 and 100
         if (newVolume > 100) {
@@ -354,7 +375,7 @@ AdjustVolume(amount) {
         }
         
         SoundSetVolume(newVolume)
-        Echo("Volume: " . Round(newVolume) . "%")
+        Echo("Volume: " . Round(newVolume) . "% (changed by " . Round(changeAmount, 1) . "%)")
         
     } catch Error as e {
         throw Error("Failed to adjust volume: " . e.message)
@@ -472,8 +493,9 @@ MUSIC COMMANDS:
 SYSTEM VOLUME COMMANDS:
   mute                 - Mute system audio
   unmute               - Unmute system audio
-  volume-up [amount]   - Increase volume (default: 10)
-  volume-down [amount] - Decrease volume (default: 10)
+  get-volume           - Get current system volume percentage
+  volume-up [percent]  - Increase volume by percentage of current volume (default: 10%)
+  volume-down [percent]- Decrease volume by percentage of current volume (default: 10%)
 
 OTHER COMMANDS:
   help                 - Show this help
@@ -482,7 +504,9 @@ EXAMPLES:
   music_controller.ahk play jazz
   music_controller.ahk search ""study music""
   music_controller.ahk toggle
-  music_controller.ahk volume-up 20
+  music_controller.ahk get-volume
+  music_controller.ahk volume-up 50    (increase by 50% of current volume)
+  music_controller.ahk volume-down 25  (decrease by 25% of current volume)
   music_controller.ahk mute
 
 NOTES:
