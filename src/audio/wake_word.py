@@ -17,6 +17,89 @@ class WakeWordDetector:
         # Try to ensure the model directory exists
         os.makedirs(str(self.settings.paths.openwakeword_models_dir), exist_ok=True)
         
+        # Configure audio settings
+        self.pa = pyaudio.PyAudio()
+        self.chunk_size = 1280  # 80 ms @ 16000 Hz
+        self.stream = None
+        self.sensitivity = self.settings.audio_settings.wake_word_sensitivity
+        self.sample_rate = self.settings.audio_settings.sample_rate
+        
+        if self.sample_rate != 16000:
+            app_logger.warning(f"OpenWakeWord typically expects 16000 Hz, but configured sample rate is {self.sample_rate}. This might affect performance.")
+        
+        # Determine the input device index based on settings
+        self.input_device_index = None
+        
+        # If a device name keyword is provided, try to find a matching device
+        if self.settings.audio_settings.input_device_name_keyword:
+            self._find_device_by_keyword()
+        else:
+            # Otherwise, use the specified index or default
+            self.input_device_index = self.settings.audio_settings.input_device_index
+            
+        self._validate_input_device()
+        
+        # Initialize the wake word model
+        self._initialize_model()
+
+    def _find_device_by_keyword(self):
+        """Find a microphone device by matching the keyword in its name."""
+        keyword = self.settings.audio_settings.input_device_name_keyword.lower()
+        app_logger.info(f"Wake word detector searching for microphone with keyword '{keyword}' in its name...")
+        
+        matched_device = None
+        all_devices = []
+        
+        # First list all available input devices
+        for i in range(self.pa.get_device_count()):
+            info = self.pa.get_device_info_by_index(i)
+            if info.get('maxInputChannels', 0) > 0:  # Check if it's an input device
+                device_name = info.get('name', '').lower()
+                all_devices.append((i, device_name))
+                if keyword in device_name:
+                    if matched_device is None:
+                        matched_device = (i, device_name)
+                        app_logger.info(f"Wake word detector found matching device: Index {i} - '{info.get('name')}'")
+                    else:
+                        app_logger.info(f"Wake word detector found another matching device: Index {i} - '{info.get('name')}' (using first match)")
+        
+        if matched_device:
+            self.input_device_index = matched_device[0]
+            app_logger.info(f"Wake word detector selected microphone with index {self.input_device_index} ('{matched_device[1]}')")
+        else:
+            app_logger.warning(f"Wake word detector: No microphone found with keyword '{keyword}' in its name. Available devices:")
+            for idx, name in all_devices:
+                app_logger.warning(f"  Index {idx}: {name}")
+            app_logger.warning("Wake word detector falling back to default input device.")
+            self.input_device_index = None
+
+    def _validate_input_device(self):
+        if self.input_device_index is not None:
+            try:
+                device_info = self.pa.get_device_info_by_index(self.input_device_index)
+                if device_info.get('maxInputChannels', 0) < 1:
+                    app_logger.warning(
+                        f"Wake word detector: Selected input device index {self.input_device_index} ('{device_info.get('name')}') "
+                        f"may not be an input device. Max input channels: {device_info.get('maxInputChannels')}. "
+                        f"Attempting to use it anyway."
+                    )
+                else:
+                    app_logger.info(f"Wake word detector using audio input device: '{device_info.get('name')}' (Index: {self.input_device_index})")
+            except OSError as e:
+                app_logger.error(f"Wake word detector: Invalid input device index {self.input_device_index}. PyAudio error: {e}. Falling back to default input device.")
+                self.input_device_index = None # Fallback to default
+        
+        if self.input_device_index is None:
+            try:
+                default_device_info = self.pa.get_default_input_device_info()
+                self.input_device_index = default_device_info['index']
+                app_logger.info(f"Wake word detector using default audio input device: '{default_device_info.get('name')}' (Index: {self.input_device_index})")
+            except IOError as e:
+                app_logger.error(f"Wake word detector: No default input device found or error accessing it: {e}. Audio capture may fail.")
+                raise RuntimeError("Failed to initialize audio input device for wake word detection.") from e
+
+    def _initialize_model(self):
+        """Initialize or reinitialize the openwakeword model."""
         # Use ONNX inference
         try:
             from openwakeword.model import Model
@@ -68,19 +151,18 @@ class WakeWordDetector:
         except ImportError as e:
             app_logger.error(f"Error importing openwakeword modules: {e}")
             raise ImportError(f"Failed to import required openwakeword modules. Please ensure openwakeword is installed correctly.")
-        
-        # Configure audio settings
-        self.pa = pyaudio.PyAudio()
-        self.chunk_size = 1280  # 80 ms @ 16000 Hz
-        self.stream = None
-        self.sensitivity = self.settings.audio_settings.wake_word_sensitivity
-        self.sample_rate = self.settings.audio_settings.sample_rate
-        
-        if self.sample_rate != 16000:
-            app_logger.warning(f"OpenWakeWord typically expects 16000 Hz, but configured sample rate is {self.sample_rate}. This might affect performance.")
+
+    def _reset_model_state(self):
+        """Reset the openwakeword model state to prevent continuous detections."""
+        try:
+            # Reinitialize the model to clear any internal state
+            app_logger.debug("Resetting wake word model state...")
+            self._initialize_model()
+        except Exception as e:
+            app_logger.error(f"Error resetting model state: {e}")
 
     def listen(self) -> bool:
-        app_logger.info(f"Initializing audio stream for wake word detection (mic_idx: {self.settings.audio_settings.input_device_index or 'default'}, sample_rate: {self.sample_rate} Hz)...")
+        app_logger.info(f"Initializing audio stream for wake word detection (mic_idx: {self.input_device_index or 'default'}, sample_rate: {self.sample_rate} Hz)...")
         try:
             # Ensure any previous stream is closed
             self.stop_listening()
@@ -91,7 +173,7 @@ class WakeWordDetector:
                 rate=self.sample_rate,
                 input=True,
                 frames_per_buffer=self.chunk_size,
-                input_device_index=self.settings.audio_settings.input_device_index
+                input_device_index=self.input_device_index
             )
             app_logger.info(f"Listening for wake word '{self.active_model}'...")
 
@@ -108,8 +190,12 @@ class WakeWordDetector:
                 if self.active_model in prediction and prediction[self.active_model] > self.sensitivity:
                     app_logger.info(f"Wake word '{self.active_model}' detected with score {prediction[self.active_model]:.2f}!")
                     self.stop_listening()
-                    # Add a small delay to prevent immediate re-triggering
-                    time.sleep(0.5)
+                    
+                    # Reset the model state to prevent continuous detection
+                    self._reset_model_state()
+                    
+                    # Add a delay to prevent immediate re-triggering
+                    time.sleep(0.2)
                     return True
 
         except Exception as e:
