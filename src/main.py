@@ -10,6 +10,7 @@ from src.audio.capture import AudioCapturer
 from src.transcription.groq_client import GroqTranscriber
 from src.llm.client import LiteLLMClient
 from src.llm.prompts import get_system_prompt, get_available_tools
+from src.tools.registry import ToolRegistry
 
 def initialize_components(settings: AppSettings):
     """Initialize all components required for the voice assistant."""
@@ -23,18 +24,54 @@ def initialize_components(settings: AppSettings):
     audio_capturer = AudioCapturer(settings)
     transcriber = GroqTranscriber(settings)
     llm_client = LiteLLMClient(settings)
+    tool_registry = ToolRegistry(settings)
     
     # Log available microphones for user reference
     audio_capturer.list_available_microphones()
     
-    return wake_detector, audio_capturer, transcriber, llm_client
+    # Test AutoHotkey connection
+    if tool_registry.test_autohotkey_connection():
+        app_logger.info("✅ AutoHotkey connection verified")
+    else:
+        app_logger.warning("⚠️ AutoHotkey connection test failed - tool execution may not work")
+    
+    # List available scripts
+    available_scripts = tool_registry.list_available_scripts()
+    app_logger.info(f"Available AutoHotkey scripts: {available_scripts}")
+    
+    return wake_detector, audio_capturer, transcriber, llm_client, tool_registry
+
+def execute_tool_call(tool_registry: ToolRegistry, tool_call: Dict[str, Any]):
+    """Execute a tool call and provide user feedback."""
+    try:
+        result = tool_registry.execute_tool_call(tool_call)
+        
+        # Log the result
+        if result["success"]:
+            app_logger.info(f"✅ {result['feedback']}")
+            if result.get("output"):
+                app_logger.info(f"📊 Output: {result['output']}")
+        else:
+            app_logger.error(f"❌ Tool execution failed: {result['feedback']}")
+            if result.get("error"):
+                app_logger.error(f"Error details: {result['error']}")
+                
+        return result
+        
+    except Exception as e:
+        app_logger.error(f"Exception during tool execution: {e}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e),
+            "feedback": f"Tool execution failed: {str(e)}"
+        }
 
 def run_voice_assistant(settings: AppSettings):
     """Main loop for the voice assistant."""
     app_logger.info("Starting Home Assistant voice control system...")
     
     # Initialize components
-    wake_detector, audio_capturer, transcriber, llm_client = initialize_components(settings)
+    wake_detector, audio_capturer, transcriber, llm_client, tool_registry = initialize_components(settings)
     
     # Get the system prompt and available tools for the LLM
     system_prompt = get_system_prompt()
@@ -42,6 +79,8 @@ def run_voice_assistant(settings: AppSettings):
     
     # Main loop
     try:
+        app_logger.info("🎤 Voice control system ready! Say 'hey jarvis' or 'alexa' to activate.")
+        
         while True:
             app_logger.info("Waiting for wake word ('hey jarvis' or 'alexa')...")
             
@@ -51,6 +90,8 @@ def run_voice_assistant(settings: AppSettings):
                 time.sleep(1)
                 continue
                 
+            app_logger.info("🎯 Wake word detected! Listening for command...")
+            
             # Wake word detected, start capturing audio
             audio_file = audio_capturer.capture_audio_after_wake()
             if not audio_file:
@@ -63,6 +104,8 @@ def run_voice_assistant(settings: AppSettings):
                 app_logger.error("Transcription failed. Returning to wake word detection.")
                 continue
                 
+            app_logger.info(f"📝 User said: '{transcript}'")
+            
             # Process transcript with LLM to determine which tool to call
             tool_call = llm_client.process_transcript(transcript, system_prompt, available_tools)
             
@@ -71,14 +114,29 @@ def run_voice_assistant(settings: AppSettings):
                 tool_name = tool_call.get("tool_name")
                 parameters = tool_call.get("parameters", {})
                 
-                # For MVP, just log the tool call
-                # In Phase 3, this will actually execute the tool
-                app_logger.info(f"Tool call: {tool_name} with parameters: {parameters}")
-                app_logger.info("Tool execution will be implemented in Phase 3.")
+                app_logger.info(f"🧠 LLM decision: {tool_name} with parameters: {parameters}")
+                
+                # Execute the tool call
+                execution_result = execute_tool_call(tool_registry, tool_call)
+                
+                # Provide additional feedback based on the tool
+                if execution_result["success"]:
+                    if tool_name == "play_music":
+                        app_logger.info("🎵 Music control command executed")
+                    elif tool_name == "control_volume":
+                        app_logger.info("🔊 Volume control command executed")
+                    elif tool_name == "system_control":
+                        app_logger.info("💻 System control command executed")
+                    elif tool_name == "unknown_request":
+                        app_logger.info("❓ Unknown request handled")
+                else:
+                    app_logger.error("❌ Command execution failed")
+                    
             else:
                 app_logger.warning("No tool call was generated from the transcript.")
                 
             # Small delay before starting to listen for wake word again
+            app_logger.info("⏳ Ready for next command...")
             time.sleep(0.5)
             
     except KeyboardInterrupt:
