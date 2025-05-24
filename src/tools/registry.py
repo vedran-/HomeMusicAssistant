@@ -295,16 +295,18 @@ class ToolRegistry:
             True if AutoHotkey is working, False otherwise
         """
         try:
-            # Test with a simple AutoHotkey command
+            # Test with a simple AutoHotkey command (just check if executable exists and runs)
+            # AutoHotkey v2 doesn't support --version, so we'll just run it with /? for help
             result = subprocess.run(
-                [self.autohotkey_exe, "--version"],
+                [self.autohotkey_exe, "/?"],
                 capture_output=True,
                 text=True,
                 timeout=5
             )
             
-            if result.returncode == 0:
-                app_logger.info(f"AutoHotkey test successful: {result.stdout.strip()}")
+            # AutoHotkey /? returns exit code 1 but shows help - this is expected
+            if result.returncode in [0, 1]:
+                app_logger.info(f"AutoHotkey test successful (exit code: {result.returncode})")
                 return True
             else:
                 app_logger.error(f"AutoHotkey test failed with exit code: {result.returncode}")

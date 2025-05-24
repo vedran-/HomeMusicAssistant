@@ -155,9 +155,17 @@ class WakeWordDetector:
     def _reset_model_state(self):
         """Reset the openwakeword model state to prevent continuous detections."""
         try:
-            # Reinitialize the model to clear any internal state
-            app_logger.debug("Resetting wake word model state...")
-            self._initialize_model()
+            # Instead of reinitializing the whole model, just clear the internal buffer
+            # This is much faster and sufficient to prevent continuous detections
+            app_logger.debug("Clearing wake word model buffer...")
+            # The model maintains an internal buffer, so we'll just force a few predictions
+            # with zeros to clear it instead of full reinitialization
+            if hasattr(self, 'oww'):
+                # Create a small silent audio chunk to clear the buffer
+                silent_chunk = np.zeros(self.chunk_size, dtype=np.int16)
+                # Process a couple of silent chunks to clear the internal state
+                for _ in range(2):
+                    self.oww.predict(silent_chunk)
         except Exception as e:
             app_logger.error(f"Error resetting model state: {e}")
 
@@ -191,11 +199,11 @@ class WakeWordDetector:
                     app_logger.info(f"Wake word '{self.active_model}' detected with score {prediction[self.active_model]:.2f}!")
                     self.stop_listening()
                     
-                    # Reset the model state to prevent continuous detection
+                    # Quick reset to prevent continuous detection
                     self._reset_model_state()
                     
-                    # Add a delay to prevent immediate re-triggering
-                    time.sleep(0.2)
+                    # Minimal delay to prevent immediate re-triggering - reduced from 0.2s to 0.05s
+                    time.sleep(0.05)
                     return True
 
         except Exception as e:
