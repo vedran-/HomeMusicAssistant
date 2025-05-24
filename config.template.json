@@ -12,7 +12,7 @@
     "silence_threshold_seconds": 2.0
   },
   "paths": {
-    "autohotkey_exe": "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe",
+    "autohotkey_exe": "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe",
     "openwakeword_models_dir": "./models/openwakeword",
     "autohotkey_scripts_dir": "./src/tools"
   },

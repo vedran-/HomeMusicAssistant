@@ -2,13 +2,18 @@ import sys
 import os
 
 # Adjust path to import from src
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-sys.path.insert(0, project_root)
+# When scripts/check_config.py is run from project root as `python scripts/check_config.py`,
+# __file__ is scripts/check_config.py. os.path.dirname(__file__) is scripts/.
+# So, parent directory (project root) is os.path.join(os.path.dirname(__file__), '..')
+project_root_for_src_import = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, project_root_for_src_import)
 
 from src.config.settings import load_settings, AppSettings
 
 if __name__ == "__main__":
-    config_file = os.path.join(project_root, "config.json")
+    # The config.json is expected to be in the project root, which is one level up from where the script lives.
+    actual_project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    config_file = os.path.join(actual_project_root, "config.json")
     try:
         settings: AppSettings = load_settings(config_file)
         # Perform a basic check, e.g., that a key setting is present

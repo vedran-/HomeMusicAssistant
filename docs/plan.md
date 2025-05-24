@@ -40,22 +40,27 @@ HomeAssistant/
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   ├── registry.py         # Tool registration and AHK script execution
-│   │   ├── music_controller.ahk  # Existing tool
+│   │   ├── music_controller.ahk  # Existing tool (user to place)
 │   │   └── system_control.ahk  # For sleep, etc. (to be created)
+│   │   └── Lib/                  # For AHK libraries (user to place UIA libs)
 │   ├── config/
 │   │   ├── __init__.py
 │   │   ├── settings.py         # Configuration management (paths, API keys, mic selection)
-│   │   └── validation.py       # Setup validation
+│   │   └── validation.py       # Setup validation (Not implemented as a Python module)
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   └── logger.py           # Logging setup
 │   └── main.py                 # Application entry point & orchestrator
-├── tools/
+├── tools/ # Top-level tools directory, e.g., for documentation
 │   └── music_controller.md     # Documentation for existing tool
 ├── scripts/
 │   ├── setup.ps1               # Main installation script (Python, openwakeword, AHK libs if needed)
-│   ├── install_dependencies.ps1 # (Potentially merged into setup.ps1 or called by it)
-│   └── validate_setup.ps1      # Script to check if all components are ready
+│   ├── validate_setup.ps1      # Script to check if all components are ready
+│   ├── check_config.py         # Helper for validate_setup.ps1
+│   ├── check_deps.py           # Helper for validate_setup.ps1
 ├── requirements.txt            # Python dependencies
 ├── config.template.json        # Configuration template
-├── .env.template               # Environment variables template
+├── .env.template               # Documented structure; user creates .env if needed
 └── README.md
 ```
 
@@ -65,47 +70,30 @@ HomeAssistant/
 **Objective**: Establish the development environment, essential configurations, and install core non-Docker dependencies.
 
 **Tasks**:
-- [ ] **Project Setup**:
-    - [ ] Initialize Git repository.
-    - [ ] Create the directory structure as defined above.
-- [ ] **Python Environment**:
-    - [ ] Create `requirements.txt` with initial packages:
-        - [ ] `litellm`
-        - [ ] `pyaudio` (for audio I/O)
-        - [ ] `openwakeword` (or its dependencies if it's a direct script/library)
-        - [ ] `pydantic` (for configuration)
-        - [ ] `python-dotenv` (for .env file handling)
-        - [ ] `loguru` (for structured logging)
-    - [ ] Create a virtual environment.
-    - [ ] Install dependencies from `requirements.txt`.
-- [ ] **AutoHotkey Setup**:
-    - [ ] Confirm AutoHotkey v2 is installed and path is known. (User confirmed pre-installed)
-    - [ ] Confirm `music_controller.ahk` is in `src/tools/`. (User confirmed pre-existing)
-    - [ ] Ensure UIAutomation v2 libraries (`Lib\UIA.ahk`, `Lib\UIA_Browser.ahk`) are available to AHK scripts, likely within `src/tools/Lib/`.
-- [ ] **Configuration System (`src/config/`)**:
-    - [ ] Design `config.template.json` including:
-        - [ ] Groq API key placeholder.
-        - [ ] LiteLLM provider/model placeholders.
-        - [ ] Audio input device index (for microphone selection).
-        - [ ] Path to AutoHotkey executable.
-        - [ ] Path to `openwakeword` models.
-    - [ ] Create `settings.py` to load and validate configuration using Pydantic.
-    - [ ] Create `.env.template` for API keys.
-- [ ] **Basic Logging**:
-    - [ ] Implement initial Loguru setup in `main.py` or a dedicated logging module.
-- [ ] **Setup Scripts (`scripts/`)**:
-    - [ ] Develop `setup.ps1` to:
-        - [ ] Check for Python 3.9+ installation.
-        - [ ] Guide user to install Python if not present.
-        - [ ] Automate virtual environment creation.
-        - [ ] Install Python dependencies from `requirements.txt`.
-        - [ ] Guide user for `openwakeword` model downloads if manual.
-        - [ ] Verify AutoHotkey installation (path can be prompted or pre-configured).
-    - [ ] Develop `validate_setup.ps1` to check:
-        - [ ] Python dependencies installed.
-        - [ ] `openwakeword` models accessible.
-        - [ ] AutoHotkey executable found.
-        - [ ] Configuration file exists (copied from template).
+- [X] **Project Setup**:
+    - [X] Initialize Git repository.
+    - [X] Create the directory structure as defined above.
+- [~] **Python Environment**: *(Partially complete; `setup.ps1` handles venv/installation)*
+    - [X] Create `requirements.txt` with initial packages.
+    - [ ] Create a Python virtual environment. *(Done by `setup.ps1`, pending user run)*
+    - [ ] Install dependencies from `requirements.txt`. *(Done by `setup.ps1`, pending user run)*
+- [~] **AutoHotkey Setup**: *(Partially complete; user to place actual files)*
+    - [X] Confirm AutoHotkey v2 is installed and path is known. *(User confirmed pre-installed)*
+    - [ ] Confirm `music_controller.ahk` is in `src/tools/`. *(Dummy created for validation; actual file pending user action)*
+    - [ ] Ensure UIAutomation v2 libraries (`Lib\UIA.ahk`, `Lib\UIA_Browser.ahk`) are in `src/tools/Lib/`. *(Dummy files created for validation; actual files pending user action)*
+- [~] **Configuration System (`src/config/`)**: *(Mostly complete)*
+    - [X] Design `config.template.json` including API keys, paths, audio settings, mic selection. *(Corrected path format)*
+    - [X] Create `settings.py` to load and validate configuration using Pydantic.
+    - [ ] Create `.env.template` for API keys. *(Creation blocked by globalignore; user to create `.env` manually if needed, based on documented structure e.g. `GROQ_API_KEY=`, `LITELLM_API_KEY=`)*
+    - [X] Create `src/config/__init__.py`.
+- [X] **Basic Logging (`src/utils/`)**:
+    - [X] Implement initial Loguru setup in `src/utils/logger.py`.
+    - [X] Create `src/utils/__init__.py`.
+- [X] **Setup Scripts (`scripts/`)**:
+    - [X] Develop `setup.ps1` to guide Python env setup, create model dir, remind about config/AHK.
+    - [X] Develop `validate_setup.ps1` to check config, Python deps, paths, AHK files (uses helper Python scripts).
+    - [X] Develop `scripts/check_config.py` (helper for `validate_setup.ps1`).
+    - [X] Develop `scripts/check_deps.py` (helper for `validate_setup.ps1`).
 
 ### Phase 2: Audio Pipeline & LLM Core
 **Objective**: Implement wake word detection, audio capture with microphone selection, transcription, and initial LLM processing.
@@ -113,7 +101,7 @@ HomeAssistant/
 **Tasks**:
 - [ ] **Wake Word Detection (`src/audio/wake_word.py`)**:
     - [ ] Integrate `openwakeword` as a direct Python library/process.
-    - [ ] Load "hey jarvis" model.
+    - [ ] Load "hey jarvis" model (models downloaded by `openwakeword` to path in `config.json`).
     - [ ] Implement a function/class to start listening and yield a boolean upon wake word detection.
 - [ ] **Audio Capture (`src/audio/capture.py`)**:
     - [ ] Implement microphone listing using PyAudio to get available input devices.
@@ -134,29 +122,31 @@ HomeAssistant/
         - [ ] Define available tools (initially `music_controller.ahk` functions, and a placeholder for `system_control.ahk`).
         - [ ] Provide examples of how to format the output for tool calls (e.g., JSON with `tool_name` and `parameters`).
 - [ ] **Main Orchestration (Initial) (`src/main.py`)**:
+    - [ ] Create `src/audio/__init__.py`, `src/transcription/__init__.py`, `src/llm/__init__.py`.
     - [ ] Wire together: Wake Word -> Audio Capture -> Transcription -> LLM.
-    - [ ] Print LLM response (tool call request) to console.
+    - [ ] Print LLM response (tool call request) to console using `app_logger`.
 
 ### Phase 3: Tool Creation & Execution
 **Objective**: Integrate the existing music tool and create the system control tool, enabling the LLM to execute them.
 
 **Tasks**:
 - [ ] **Tool Registry & Execution (`src/tools/registry.py`)**:
+    - [ ] Create `src/tools/__init__.py`.
     - [ ] Implement a function to parse LLM output (expected JSON for tool calls).
     - [ ] Implement a mechanism to call AutoHotkey scripts:
-        - [ ] Pass command and parameters to the AHK script (e.g., `AutoHotkey.exe script.ahk command param1 param2`).
-        - [ ] Capture output/errors from AHK scripts.
+        - [ ] Use `subprocess` module to run `AutoHotkey.exe script.ahk command param1 param2`.
+        - [ ] Capture stdout/stderr from AHK scripts for feedback/logging.
     - [ ] Register the `music_controller.ahk` tool:
-        - [ ] Map LLM tool names (e.g., "playMusic", "setVolume") to `music_controller.ahk` commands.
+        - [ ] Map LLM tool names (e.g., "playMusic", "setVolume") to `music_controller.ahk` commands based on `tools/music_controller.md`.
 - [ ] **System Control Tool (`src/tools/system_control.ahk`)**:
     - [ ] Create `system_control.ahk` with functions for:
         - [ ] Putting the system to sleep (`Sleep` command or `DllCall("PowrProf.dll", "SetSuspendState", "int", 0, "int", 0, "int", 0)`).
-        - [ ] Other potential controls (e.g., shutdown, volume - if not fully covered by music_controller).
+        - [ ] *Self-correction: Volume control is already in `music_controller.ahk` which handles system volume, so no need to duplicate here unless for different types of volume control.*
     - [ ] Ensure it accepts command-line arguments similar to `music_controller.ahk`.
     - [ ] Register this tool in `src/tools/registry.py` and update `src/llm/prompts.py`.
 - [ ] **Main Orchestration (Full) (`src/main.py`)**:
     - [ ] Integrate tool execution: LLM Response -> Tool Parser -> AHK Caller.
-    - [ ] Provide feedback to the user (e.g., "Playing music", "Going to sleep").
+    - [ ] Provide feedback to the user (e.g., "Playing music", "Going to sleep") using `app_logger` or TTS in future.
 
 ### Phase 4: MVP Testing & Refinement
 **Objective**: Ensure all components work together reliably for the MVP scope.
@@ -171,12 +161,12 @@ HomeAssistant/
     - [ ] Review error handling in each module (audio, transcription, LLM, tool execution).
     - [ ] Ensure graceful recovery or clear error messages for common issues (API errors, AHK script failures, mic issues).
 - [ ] **Configuration & Usability**:
-    - [ ] Test the `setup.ps1` and `validate_setup.ps1` scripts.
+    - [ ] Test the `setup.ps1` and `validate_setup.ps1` scripts thoroughly from a clean user perspective.
     - [ ] Ensure microphone selection is clear and works.
-    - [ ] Document basic usage in `README.md`.
+    - [ ] Document basic usage and setup in `README.md`.
 - [ ] **Code Review & Cleanup**:
     - [ ] Review code for clarity, simplicity, and adherence to the plan.
-    - [ ] Remove any unused code or placeholders not relevant to MVP.
+    - [ ] Remove any unused code or placeholders not relevant to MVP (e.g. dummy AHK files if user has placed actual ones).
 
 ## Future Scope (Post-MVP)
 - Text-to-speech (TTS) feedback (e.g., Piper).
