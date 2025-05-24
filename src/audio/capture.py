@@ -23,8 +23,48 @@ class AudioCapturer:
         # It's a heuristic. Lower values are more sensitive to noise.
         self.silence_rms_threshold = 500  # Example value, assuming 16-bit audio. Max is 32767.
 
-        self.input_device_index = self.settings.audio_settings.input_device_index
+        # Determine the input device index based on settings
+        self.input_device_index = None
+        
+        # If a device name keyword is provided, try to find a matching device
+        if self.settings.audio_settings.input_device_name_keyword:
+            self._find_device_by_keyword()
+        else:
+            # Otherwise, use the specified index or default
+            self.input_device_index = self.settings.audio_settings.input_device_index
+            
         self._validate_input_device()
+
+    def _find_device_by_keyword(self):
+        """Find a microphone device by matching the keyword in its name."""
+        keyword = self.settings.audio_settings.input_device_name_keyword.lower()
+        app_logger.info(f"Searching for microphone with keyword '{keyword}' in its name...")
+        
+        matched_device = None
+        all_devices = []
+        
+        # First list all available input devices
+        for i in range(self.pa.get_device_count()):
+            info = self.pa.get_device_info_by_index(i)
+            if info.get('maxInputChannels', 0) > 0:  # Check if it's an input device
+                device_name = info.get('name', '').lower()
+                all_devices.append((i, device_name))
+                if keyword in device_name:
+                    if matched_device is None:
+                        matched_device = (i, device_name)
+                        app_logger.info(f"Found matching device: Index {i} - '{info.get('name')}'")
+                    else:
+                        app_logger.info(f"Found another matching device: Index {i} - '{info.get('name')}' (using first match)")
+        
+        if matched_device:
+            self.input_device_index = matched_device[0]
+            app_logger.info(f"Selected microphone with index {self.input_device_index} ('{matched_device[1]}')")
+        else:
+            app_logger.warning(f"No microphone found with keyword '{keyword}' in its name. Available devices:")
+            for idx, name in all_devices:
+                app_logger.warning(f"  Index {idx}: {name}")
+            app_logger.warning("Falling back to default input device.")
+            self.input_device_index = None
 
     def _validate_input_device(self):
         if self.input_device_index is not None:
@@ -165,6 +205,84 @@ class AudioCapturer:
             app_logger.error(f"Failed to save audio to WAV file {wav_filename}: {e}", exc_info=True)
             return None
 
+    def capture_test(self, duration: float = 5.0, output_filename_base: str = "test_audio") -> Optional[str]:
+        """
+        Capture audio for testing purposes for a fixed duration.
+        
+        Args:
+            duration: Recording duration in seconds
+            output_filename_base: Base name for the output file
+            
+        Returns:
+            Path to the saved audio file or None if capture failed
+        """
+        app_logger.info(f"Starting test audio capture for {duration} seconds...")
+        
+        stream = None
+        try:
+            stream = self.pa.open(
+                format=self.format,
+                channels=self.channels,
+                rate=self.sample_rate,
+                input=True,
+                frames_per_buffer=self.chunk_size,
+                input_device_index=self.input_device_index
+            )
+        except Exception as e:
+            app_logger.error(f"Failed to open audio stream for test capture: {e}", exc_info=True)
+            return None
+
+        app_logger.info(f"Recording for {duration} seconds... Speak now.")
+
+        frames = []
+        chunks_to_record = int((self.sample_rate / self.chunk_size) * duration)
+        
+        for _ in range(chunks_to_record):
+            try:
+                audio_chunk = stream.read(self.chunk_size, exception_on_overflow=False)
+                frames.append(audio_chunk)
+            except IOError as e:
+                app_logger.error(f"IOError during test audio capture: {e}", exc_info=True)
+                break
+            except Exception as e:
+                app_logger.error(f"Unexpected error during test audio capture: {e}", exc_info=True)
+                break
+        
+        app_logger.info("Test recording finished.")
+
+        if stream:
+            try:
+                stream.stop_stream()
+                stream.close()
+            except Exception as e:
+                app_logger.error(f"Error closing test audio stream: {e}", exc_info=True)
+        
+        if not frames:
+            app_logger.warning("No audio was recorded during test.")
+            return None
+
+        # Save to either the configured output directory or temp directory
+        if hasattr(self.settings.paths, 'audio_output_dir') and self.settings.paths.audio_output_dir:
+            os.makedirs(self.settings.paths.audio_output_dir, exist_ok=True)
+            output_dir = self.settings.paths.audio_output_dir
+        else:
+            output_dir = tempfile.gettempdir()
+            
+        safe_output_filename_base = "".join(c if c.isalnum() or c in ('_', '-') else '_' for c in output_filename_base)
+        wav_filename = os.path.join(output_dir, f"{safe_output_filename_base}_{int(time.time())}.wav")
+
+        try:
+            with wave.open(wav_filename, 'wb') as wf:
+                wf.setnchannels(self.channels)
+                wf.setsampwidth(self.pa.get_sample_size(self.format))
+                wf.setframerate(self.sample_rate)
+                wf.writeframes(b''.join(frames))
+            app_logger.info(f"Test audio saved to file: {wav_filename}")
+            return wav_filename
+        except Exception as e:
+            app_logger.error(f"Failed to save test audio to WAV file {wav_filename}: {e}", exc_info=True)
+            return None
+
     def __del__(self):
         if self.pa:
             try:
@@ -201,6 +319,16 @@ if __name__ == '__main__':
         if settings.audio_settings.input_device_index is None:
             app_logger.warning("No input_device_index specified in config.json/audio_settings. Using default.")
 
+        # Test the fixed duration audio capture
+        app_logger.info("Starting fixed duration test capture (5 seconds)...")
+        test_file = capturer.capture_test(duration=5.0)
+        
+        if test_file:
+            app_logger.info(f"Fixed duration test capture saved to: {test_file}")
+        else:
+            app_logger.error("Fixed duration test capture failed or no audio recorded.")
+            
+        # Test the silence-based audio capture
         app_logger.info("Starting capture test (simulating wake word detected)...")
         output_file = capturer.capture_audio_after_wake(output_filename_base="test_capture")
         

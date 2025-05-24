@@ -7,6 +7,7 @@
   },
   "audio_settings": {
     "input_device_index": null,
+    "input_device_name_keyword": null,
     "sample_rate": 16000,
     "wake_word_sensitivity": 0.5,
     "silence_threshold_seconds": 2.0

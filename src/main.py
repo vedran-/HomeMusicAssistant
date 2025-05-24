@@ -43,7 +43,7 @@ def run_voice_assistant(settings: AppSettings):
     # Main loop
     try:
         while True:
-            app_logger.info("Waiting for wake word ('hey jarvis')...")
+            app_logger.info("Waiting for wake word ('hey jarvis' or 'alexa')...")
             
             # Wait for wake word
             if not wake_detector.listen():

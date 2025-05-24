@@ -13,6 +13,7 @@ class LiteLLMSettings(BaseModel):
 
 class AudioSettings(BaseModel):
     input_device_index: Optional[int] = Field(default=None)
+    input_device_name_keyword: Optional[str] = Field(default=None, description="Keyword to match in the device name. If provided, will override input_device_index.")
     sample_rate: int = Field(default=16000)
     wake_word_sensitivity: float = Field(default=0.5)
     silence_threshold_seconds: float = Field(default=2.0)
