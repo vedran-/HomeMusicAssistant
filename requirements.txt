@@ -1,0 +1,6 @@
+litellm
+pyaudio
+openwakeword
+pydantic
+python-dotenv
+loguru 

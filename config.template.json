@@ -1,0 +1,23 @@
+{
+  "groq_api_key": "YOUR_GROQ_API_KEY",
+  "litellm_settings": {
+    "provider": "openai",
+    "model": "gpt-3.5-turbo",
+    "api_key": "YOUR_LLM_API_KEY_IF_NEEDED"
+  },
+  "audio_settings": {
+    "input_device_index": null,
+    "sample_rate": 16000,
+    "wake_word_sensitivity": 0.5,
+    "silence_threshold_seconds": 2.0
+  },
+  "paths": {
+    "autohotkey_exe": "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe",
+    "openwakeword_models_dir": "./models/openwakeword",
+    "autohotkey_scripts_dir": "./src/tools"
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "{time} | {level} | {message}"
+  }
+} 

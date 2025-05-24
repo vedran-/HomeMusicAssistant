@@ -44,12 +44,16 @@ Main() {
                 Echo("System unmuted")
             
             case "volume-up":
-                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 100
                 AdjustVolume(amount)
             
             case "volume-down":
-                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 50
                 AdjustVolume(-amount)
+            
+            case "get-volume":
+                currentVolume := SoundGetVolume()
+                Echo("Volume: " . Round(currentVolume) . "%")
             
             case "help":
                 ShowHelp()
@@ -257,50 +261,7 @@ Echo(message) {
     }
 }
 
-; Show help information
-ShowHelp() {
-    helpText := "
-    (
-YouTube Music & System Control Script
-
-USAGE:
-  TestMusic.ahk <command> [parameters]
-
-MUSIC COMMANDS:
-  play [genre]         - Open YouTube Music and play radio for genre
-                        Default: 'chill music'
-                        Examples: play jazz, play ""classical music""
-  
-  search <term>        - Search for music in YouTube Music
-                        Example: search ""rock music""
-  
-  toggle               - Toggle play/pause current music
-
-SYSTEM VOLUME COMMANDS:
-  mute                 - Mute system audio
-  unmute               - Unmute system audio
-  volume-up [amount]   - Increase volume (default: 10)
-  volume-down [amount] - Decrease volume (default: 10)
-
-OTHER COMMANDS:
-  help                 - Show this help
-
-EXAMPLES:
-  TestMusic.ahk play jazz
-  TestMusic.ahk search ""study music""
-  TestMusic.ahk toggle
-  TestMusic.ahk volume-up 20
-  TestMusic.ahk mute
-
-NOTES:
-- The script works with YouTube Music in Brave browser
-- Music commands require internet connection
-- The script will open YouTube Music automatically if needed
-- Use quotes around multi-word search terms
-    )"
-    
-    Echo(helpText)
-}
+; Show help informationShowHelp() {    helpText := "    (YouTube Music & System Control ScriptUSAGE:  PC_Controller.ahk <command> [parameters]MUSIC COMMANDS:  play [genre]         - Open YouTube Music and play radio for genre                        Default: 'chill music'                        Examples: play jazz, play ""classical music""    search <term>        - Search for music in YouTube Music                        Example: search ""rock music""    toggle               - Toggle play/pause current musicSYSTEM VOLUME COMMANDS:  mute                 - Mute system audio  unmute               - Unmute system audio  volume-up [amount]   - Increase volume (default: 10)  volume-down [amount] - Decrease volume (default: 10)  get-volume           - Get current system volumeOTHER COMMANDS:  help                 - Show this helpEXAMPLES:  PC_Controller.ahk play jazz  PC_Controller.ahk search ""study music""  PC_Controller.ahk toggle  PC_Controller.ahk volume-up 20  PC_Controller.ahk mute  PC_Controller.ahk get-volumeNOTES:- The script works with YouTube Music in Brave browser- Music commands require internet connection- The script will open YouTube Music automatically if needed- Use quotes around multi-word search terms    )"        Echo(helpText)}
 
 ; ====================================================================
 ; SCRIPT EXECUTION
