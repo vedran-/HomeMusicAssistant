@@ -13,12 +13,18 @@ YOUTUBE_MUSIC_URL := "https://music.youtube.com"
 ; ====================================================================
 
 Main() {
+    ; Write to log file immediately
+    FileAppend("SCRIPT STARTED: " . A_Now . "`n", "music_controller_debug.log")
+    FileAppend("Arguments received: " . A_Args.Length . "`n", "music_controller_debug.log")
+    
     if (A_Args.Length = 0) {
+        FileAppend("No arguments provided, showing help`n", "music_controller_debug.log")
         ShowHelp()
         ExitApp()
     }
     
     command := A_Args[1]
+    FileAppend("Command: " . command . "`n", "music_controller_debug.log")
     
     try {
         switch command {
@@ -168,221 +174,291 @@ TogglePlayback() {
 
 ; Search for music in YouTube Music using UIAutomation
 SearchMusicUIA(cUIA, searchTerm) {
-    Echo("Searching for: " . searchTerm)
+    Echo("=== SEARCHING FOR MUSIC: " . searchTerm . " ===")
     
     try {
-        ; Wait for page to load completely
         Sleep(200)
         
-        ; Method 1: Try to find search box directly first (most reliable)
-        searchBox := ""
-        try {
-            ; Try by AutomationId (id="input" in HTML)
-            searchBox := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
-        } catch {
-            try {
-                ; Try by role and placeholder text
-                searchBox := cUIA.FindElement({Type: "Edit", Name: "Search songs, albums, artists, podcasts"})
-            } catch {
-                try {
-                    ; Try by general search terms
-                    searchBox := cUIA.FindElement({Name: "Search", Type: "Edit"})
-                } catch {
-                    try {
-                        ; Try finding by placeholder text pattern
-                        searchBox := cUIA.FindElement({Type: "Edit", matchMode: 2, Name: "Search"})
-                    }
-                }
-            }
-        }
+        ; Use unified search box finder
+        searchBox := FindYouTubeMusicSearchBox(cUIA)
         
-        ; If search box found directly, clear and use it
         if (searchBox) {
-            ; Clear using the dedicated clear button first
-            ClearSearchBox(cUIA)
-            Sleep(100)
+            Echo("✅ Search box found! Proceeding with search...")
             
-            ; Set focus and enter search term
-            searchBox.SetFocus()
-            Sleep(100)
+            ; Clear the search box
+            if (ClearSearchBox(cUIA)) {
+                Echo("✅ Search box cleared successfully")
+            } else {
+                Echo("⚠️ Search box clearing failed, but continuing...")
+            }
             
-            ; Ensure box is really empty before setting value
-            searchBox.SetValue("")
-            Sleep(50)
-            searchBox.SetValue(searchTerm)
+            ; Focus and enter search term
+            try {
+                searchBox.SetFocus()
+                Sleep(200)
+                Echo("Focus set on search box")
+            } catch {
+                Echo("Could not set focus, but continuing...")
+            }
+            
+            ; Enter search term using clipboard method
+            if (SendTextViaClipboard(cUIA, searchTerm)) {
+                Echo("✅ Search term entered via clipboard method")
+            } else {
+                Echo("Clipboard method failed, using direct typing")
+                cUIA.Send(searchTerm)
+            }
             Sleep(200)
             
-            ; Press Enter to search
+            ; Submit search
             cUIA.Send("{Enter}")
-            Echo("Search completed using direct input method")
-        } else {
-            ; Method 2: Try activating search mode first, then find input
-            Echo("Direct search box not found, activating search mode...")
+            Echo("✅ Search submitted successfully")
             
-            ; Make sure we're not already in search mode by pressing Escape first
+        } else {
+            Echo("❌ No search box found, using keyboard fallback")
+            
+            ; Keyboard fallback: Escape → "/" → type → Enter
             cUIA.Send("{Escape}")
             Sleep(100)
-            
-            ; Now trigger search mode with "/"
             cUIA.Send("/")
             Sleep(300)
             
-            ; Try to find the search box again after activating search
-            try {
-                searchBox := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
-                if (searchBox) {
-                    ; Clear any existing content
-                    searchBox.SetValue("")
-                    Sleep(50)
-                    searchBox.SetValue(searchTerm)
-                    Sleep(200)
-                    cUIA.Send("{Enter}")
-                    Echo("Search completed using activated search mode")
-                } else {
-                    ; Final keyboard fallback - type directly after "/"
-                    cUIA.Send(searchTerm)
-                    Sleep(200)
-                    cUIA.Send("{Enter}")
-                    Echo("Search completed using keyboard fallback")
-                }
-            } catch {
-                ; Ultimate fallback - type directly
+            if (SendTextViaClipboard(cUIA, searchTerm)) {
+                Echo("Search term entered via clipboard (keyboard fallback)")
+            } else {
                 cUIA.Send(searchTerm)
-                Sleep(200)
-                cUIA.Send("{Enter}")
-                Echo("Search completed using ultimate keyboard fallback")
+                Echo("Direct typing used (keyboard fallback)")
             }
+            Sleep(200)
+            cUIA.Send("{Enter}")
+            Echo("Search completed using keyboard fallback")
         }
         
         ; Wait for search results
         Sleep(2000)
+        Echo("=== SEARCH PROCESS COMPLETED ===")
         
     } catch Error as e {
-        Echo("Search error: " . e.message . " - Using emergency fallback")
-        ; Emergency fallback - ensure clean state first
+        Echo("❌ SEARCH ERROR: " . e.message . " - Using emergency fallback")
+        
+        ; Emergency keyboard fallback
         cUIA.Send("{Escape}")
         Sleep(200)
         cUIA.Send("/")
         Sleep(300)
-        cUIA.Send(searchTerm)
+        
+        if (SendTextViaClipboard(cUIA, searchTerm)) {
+            Echo("Emergency search using clipboard method")
+        } else {
+            cUIA.Send(searchTerm)
+            Echo("Emergency search using direct typing")
+        }
         Sleep(300)
         cUIA.Send("{Enter}")
         Sleep(1500)
+        Echo("Emergency fallback completed")
     }
 }
 
-; Clear the search box using YouTube Music's dedicated clear button
-ClearSearchBox(cUIA) {
+; Unified function to find YouTube Music search box - tests multiple methods
+FindYouTubeMusicSearchBox(cUIA) {
+    Echo("=== SEARCHING FOR YOUTUBE MUSIC SEARCH BOX ===")
+    
+    ; Test Method 1: AutomationId "input"
+    Echo("TEST 1: Trying AutomationId 'input'...")
     try {
-        ; Method 1: Try to find clear button by ID and title (most reliable)
-        clearButton := ""
-        try {
-            ; Look for clear button by AutomationId (id="clear-button" in HTML)
-            clearButton := cUIA.FindElement({AutomationId: "clear-button"})
-        } catch {
+        searchBox := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
+        Echo("✅ TEST 1 SUCCESS: Found element with AutomationId 'input'")
+        return searchBox
+    } catch {
+        Echo("❌ TEST 1 FAILED: AutomationId 'input' not found")
+    }
+    
+    ; Test Method 2: Placeholder text
+    Echo("TEST 2: Trying placeholder text 'Search songs, albums, artists, podcasts'...")
+    try {
+        searchBox := cUIA.FindElement({Type: "Edit", Name: "Search songs, albums, artists, podcasts"})
+        Echo("✅ TEST 2 SUCCESS: Found element with placeholder text")
+        return searchBox
+    } catch {
+        Echo("❌ TEST 2 FAILED: Placeholder text not found")
+    }
+    
+    ; Test Method 3: Role combobox (from HTML: role="combobox")
+    Echo("TEST 3: Trying role combobox...")
+    try {
+        searchBox := cUIA.FindElement({Type: "ComboBox"})
+        Echo("✅ TEST 3 SUCCESS: Found ComboBox element")
+        return searchBox
+    } catch {
+        Echo("❌ TEST 3 FAILED: ComboBox not found")
+    }
+    
+    ; Test Method 4: Look for elements with "search" in name (case insensitive)
+    Echo("TEST 4: Looking for elements with 'search' in name...")
+    try {
+        allElements := cUIA.FindElements({Type: "Edit"})
+        for element in allElements {
             try {
-                ; Look for clear button by title attribute
-                clearButton := cUIA.FindElement({Name: "Clear", Type: "Button"})
+                name := element.Name
+                if (InStr(name, "search") || InStr(name, "Search")) {
+                    Echo("✅ TEST 4 SUCCESS: Found Edit element with 'search' in name: '" . name . "'")
+                    return element
+                }
+            }
+        }
+        Echo("❌ TEST 4 FAILED: No Edit elements with 'search' in name")
+    } catch {
+        Echo("❌ TEST 4 ERROR: Could not enumerate Edit elements")
+    }
+    
+    ; Test Method 5: List all available Edit elements for analysis
+    Echo("TEST 5: Listing ALL Edit elements for analysis...")
+    try {
+        allEdits := cUIA.FindElements({Type: "Edit"})
+        Echo("Found " . allEdits.Length . " Edit elements:")
+        
+        maxElements := Min(allEdits.Length, 10)
+        Loop maxElements {
+            try {
+                element := allEdits[A_Index]
+                name := ""
+                automationId := ""
+                className := ""
+                
+                try { 
+                    name := element.Name 
+                } catch { 
+                    name := "(no name)" 
+                }
+                try { 
+                    automationId := element.AutomationId 
+                } catch { 
+                    automationId := "(no id)" 
+                }
+                try { 
+                    className := element.ClassName 
+                } catch { 
+                    className := "(no class)" 
+                }
+                
+                Echo("  " . A_Index . ". Name: '" . name . "' | AutomationId: '" . automationId . "' | Class: '" . className . "'")
             } catch {
+                Echo("  " . A_Index . ". (error reading element)")
+            }
+        }
+    } catch {
+        Echo("❌ TEST 5 ERROR: Could not enumerate Edit elements")
+    }
+    
+    ; Test Method 6: Try different element types
+    Echo("TEST 6: Trying different element types...")
+    elementTypes := ["TextBox", "Document", "Pane", "Group"]
+    for typeName in elementTypes {
+        Echo("  Testing type: " . typeName)
+        try {
+            elements := cUIA.FindElements({Type: typeName})
+            Echo("    Found " . elements.Length . " " . typeName . " elements")
+            
+            ; Look for search-related elements in this type
+            for element in elements {
                 try {
-                    ; Look for button with aria-label="Clear"
-                    clearButtons := cUIA.FindElements({Type: "Button"})
-                    for button in clearButtons {
-                        try {
-                            if (button.GetAttribute("aria-label") = "Clear") {
-                                clearButton := button
-                                break
-                            }
-                        }
+                    name := element.Name
+                    if (InStr(name, "search") || InStr(name, "Search")) {
+                        Echo("✅ TEST 6 SUCCESS: Found " . typeName . " with 'search' in name: '" . name . "'")
+                        return element
                     }
                 }
-            }
-        }
-        
-        if (clearButton) {
-            ; Check if clear button is visible/enabled before clicking
-            try {
-                if (clearButton.IsEnabled) {
-                    clearButton.Click()
-                    Sleep(200)
-                    Echo("Search box cleared using clear button")
-                    
-                    ; Double-check by also doing direct clear on input
-                    try {
-                        searchInput := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
-                        if (searchInput) {
-                            searchInput.SetValue("")
-                            Sleep(100)
-                        }
-                    }
-                    return true
-                }
-            } catch {
-                ; Button might exist but not be clickable
-            }
-        }
-        
-        ; Method 2: Direct input clearing (more aggressive)
-        Echo("Clear button not found, using direct input clearing")
-        try {
-            ; Focus on search box first
-            searchInput := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
-            if (searchInput) {
-                searchInput.SetFocus()
-                Sleep(100)
-                
-                ; Multiple clearing methods to ensure empty box
-                searchInput.SetValue("")  ; Direct clear
-                Sleep(50)
-                
-                ; Additional keyboard clearing as backup
-                cUIA.Send("^a")  ; Select all
-                Sleep(50)
-                cUIA.Send("{Delete}")  ; Delete
-                Sleep(50)
-                
-                ; Verify it's really empty
-                searchInput.SetValue("")  ; Final direct clear
-                Sleep(100)
-                
-                Echo("Search box cleared using direct input method")
-                return true
             }
         } catch {
-            ; Method 3: Keyboard-only fallback (most aggressive)
-            Echo("Using keyboard-only clearing fallback")
-            try {
-                ; Press Escape first to ensure we're in clean state
-                cUIA.Send("{Escape}")
-                Sleep(100)
-                
-                ; Activate search if needed
-                cUIA.Send("/")
-                Sleep(200)
-                
-                ; Clear everything
-                cUIA.Send("^a")  ; Select all
-                Sleep(100)
-                cUIA.Send("{Delete}")  ; Delete
-                Sleep(100)
-                cUIA.Send("^a")  ; Select all again (in case anything remains)
-                Sleep(50)
-                cUIA.Send("{Backspace}")  ; Backspace
-                Sleep(100)
-                
-                ; Press Escape to exit search mode cleanly
-                cUIA.Send("{Escape}")
-                Sleep(100)
-                
-                Echo("Search box cleared using keyboard fallback")
-                return true
-            }
+            Echo("    Error getting " . typeName . " elements")
+        }
+    }
+    Echo("❌ TEST 6 FAILED: No search elements found in alternative types")
+    
+    Echo("❌ ALL TESTS FAILED: Could not find YouTube Music search box")
+    return false
+}
+
+; Simple search box clearing using unified finder
+ClearSearchBox(cUIA) {
+    Echo("=== CLEARING SEARCH BOX ===")
+    
+    ; Use unified finder
+    searchInput := FindYouTubeMusicSearchBox(cUIA)
+    if (!searchInput) {
+        Echo("❌ CLEAR FAILED: Could not find search box")
+        return false
+    }
+    
+    try {
+        ; Focus on search box
+        Echo("Setting focus on search box...")
+        searchInput.SetFocus()
+        Sleep(300)
+        Echo("✅ Focus set successfully")
+        
+        ; Get current value
+        currentValue := ""
+        try {
+            currentValue := searchInput.GetValue()
+            Echo("Current value: '" . currentValue . "'")
+        } catch {
+            Echo("Could not get current value")
         }
         
-        return false
+        ; Clear using Ctrl+A + Delete
+        Echo("Sending Ctrl+A...")
+        cUIA.Send("^a")
+        Sleep(200)
+        
+        Echo("Sending Delete...")
+        cUIA.Send("{Delete}")
+        Sleep(200)
+        
+        ; Check if it worked
+        try {
+            newValue := searchInput.GetValue()
+            Echo("After clearing: '" . newValue . "'")
+            
+            if (!newValue || newValue = "" || StrLen(Trim(newValue)) = 0) {
+                Echo("✅ CLEAR SUCCESS: Search box is empty")
+                return true
+            } else {
+                Echo("❌ CLEAR FAILED: Search box still contains: '" . newValue . "'")
+                return false
+            }
+        } catch {
+            Echo("Could not verify clearing result")
+            return false
+        }
         
     } catch Error as e {
-        Echo("Error clearing search box: " . e.message)
+        Echo("❌ CLEAR ERROR: " . e.message)
+        return false
+    }
+}
+
+; Send text using clipboard method to avoid capitalization issues
+SendTextViaClipboard(cUIA, text) {
+    try {
+        ; Store original clipboard content
+        originalClipboard := A_Clipboard
+        
+        ; Set clipboard to our text
+        A_Clipboard := text
+        Sleep(100)  ; Wait for clipboard to be set
+        
+        ; Paste the text
+        cUIA.Send("^v")
+        Sleep(200)  ; Wait for paste to complete
+        
+        ; Restore original clipboard
+        A_Clipboard := originalClipboard
+        
+        return true
+    } catch Error as e {
+        Echo("Error sending text via clipboard: " . e.message)
         return false
     }
 }
@@ -606,8 +682,14 @@ GetYouTubeMusicBrowser() {
 ; UTILITY FUNCTIONS
 ; ====================================================================
 
-; Echo message to stdout (visible when run from command line)
+; Echo message to stdout AND log file for debugging
 Echo(message) {
+    ; Write to log file for debugging
+    try {
+        FileAppend(message . "`n", "music_controller_debug.log")
+    }
+    
+    ; Also try console output
     try {
         ; Method 1: Try direct FileAppend to stdout
         FileAppend(message . "`n", "*")
