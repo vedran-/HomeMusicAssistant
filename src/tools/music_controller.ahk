@@ -35,6 +35,29 @@ Main() {
             case "toggle-shuffle":
                 ToggleShuffleMode()
             
+            case "next":
+                NextSong()
+            
+            case "previous", "prev":
+                PreviousSong()
+            
+            case "forward":
+                seconds := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+                ForwardSeconds(seconds)
+            
+            case "back", "rewind":
+                seconds := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+                BackSeconds(seconds)
+            
+            case "like":
+                LikeSong()
+            
+            case "dislike":
+                DislikeSong()
+            
+            case "repeat":
+                ToggleRepeat()
+            
             case "search":
                 if (A_Args.Length >= 2) {
                     SearchMusic(A_Args[2])
@@ -105,14 +128,14 @@ TogglePlayback() {
         playButtons := cUIA.FindElements({Name: "Play", Type: "Button"})
         pauseButtons := cUIA.FindElements({Name: "Pause", Type: "Button"})
         
-        MsgBox("Debug: Found " . playButtons.Length . " Play buttons and " . pauseButtons.Length . " Pause buttons", "Toggle Debug", 0)
+        ;MsgBox("Debug: Found " . playButtons.Length . " Play buttons and " . pauseButtons.Length . " Pause buttons", "Toggle Debug", 0)
         
         ; Try Pause button first (if music is playing)
         if (pauseButtons.Length > 0) {
             lastPauseBtn := pauseButtons[pauseButtons.Length]
-            MsgBox("About to click Pause button (last one found)!", "Toggle Action", 0)
+            ;MsgBox("About to click Pause button (last one found)!", "Toggle Action", 0)
             lastPauseBtn.Click()
-            MsgBox("Pause button clicked!", "Toggle Result", 0)
+            ;MsgBox("Pause button clicked!", "Toggle Result", 0)
             Echo("Music paused")
             return
         }
@@ -120,15 +143,15 @@ TogglePlayback() {
         ; If no Pause button, try Play button
         if (playButtons.Length > 0) {
             lastPlayBtn := playButtons[playButtons.Length]
-            MsgBox("About to click Play button (last one found)!", "Toggle Action", 0)
+            ;MsgBox("About to click Play button (last one found)!", "Toggle Action", 0)
             lastPlayBtn.Click()
-            MsgBox("Play button clicked!", "Toggle Result", 0)
+            ;MsgBox("Play button clicked!", "Toggle Result", 0)
             Echo("Music resumed")
             return
         }
         
         ; Fallback to keyboard shortcut
-        MsgBox("No Play/Pause buttons found. Using Space key fallback.", "Toggle Fallback", 0)
+        ;MsgBox("No Play/Pause buttons found. Using Space key fallback.", "Toggle Fallback", 0)
         cUIA.Send("{Space}")
         Echo("Toggled playback (keyboard fallback)")
         
@@ -149,7 +172,7 @@ SearchMusicUIA(cUIA, searchTerm) {
     
     try {
         ; Wait for page to load completely
-        Sleep(2000)
+        Sleep(200)
         
         ; Method 1: Try to find search box by common selectors
         searchBox := ""
@@ -175,12 +198,12 @@ SearchMusicUIA(cUIA, searchTerm) {
             try {
                 searchIcon := cUIA.FindElement({Name: "Search", Type: "Button"})
                 searchIcon.Click()
-                Sleep(500)
+                Sleep(200)
                 searchBox := cUIA.FindElement({Type: "Edit"})
             } catch {
                 ; Method 3: Use keyboard shortcut to open search
                 cUIA.Send("/")
-                Sleep(500)
+                Sleep(200)
                 ; Focus should now be on search box
             }
         }
@@ -188,41 +211,41 @@ SearchMusicUIA(cUIA, searchTerm) {
         if (searchBox) {
             ; Clear existing content and type search term - Enhanced clearing
             searchBox.SetFocus()
-            Sleep(200)
+            Sleep(100)
             
             ; Multiple clearing attempts to ensure empty search box
             searchBox.SetValue("")  ; Try direct clearing first
-            Sleep(100)
+            Sleep(50)
             cUIA.Send("^a")  ; Select all
-            Sleep(100)
+            Sleep(50)
             cUIA.Send("{Delete}")  ; Delete selected content
-            Sleep(100)
+            Sleep(50)
             cUIA.Send("^a")  ; Select again in case anything remains
-            Sleep(100)
+            Sleep(50)
             cUIA.Send("{Backspace}")  ; Backspace as additional clearing
-            Sleep(200)
+            Sleep(50)
             
             ; Now enter the search term
             searchBox.SetValue(searchTerm)
-            Sleep(500)
+            Sleep(200)
             
             ; Press Enter to search
             cUIA.Send("{Enter}")
         } else {
             ; Fallback: Use global search hotkey and type - Enhanced clearing
             cUIA.Send("/")
-            Sleep(300)
+            Sleep(200)
             ; Multiple clearing attempts for keyboard fallback
             cUIA.Send("^a")  ; Select all
-            Sleep(100)
+            Sleep(50)
             cUIA.Send("{Delete}")  ; Delete
-            Sleep(100)
+            Sleep(50)
             cUIA.Send("^a")  ; Select all again
-            Sleep(100)
+            Sleep(50)
             cUIA.Send("{Backspace}")  ; Backspace
-            Sleep(100)
+            Sleep(50)
             cUIA.Send(searchTerm)
-            Sleep(300)
+            Sleep(200)
             cUIA.Send("{Enter}")
         }
         
@@ -261,90 +284,71 @@ StartRadioUIA(cUIA) {
         ; Debug: Show total button count
         try {
             allButtons := cUIA.FindElements({Type: "Button"})
-            MsgBox("Debug: Found " . allButtons.Length . " total buttons on page", "Button Count", 0)
+            ;MsgBox("Debug: Found " . allButtons.Length . " total buttons on page", "Button Count", 0)
         } catch {
-            MsgBox("Debug: Could not count buttons", "Error", 0)
+            ;MsgBox("Debug: Could not count buttons", "Error", 0)
         }
         
         ; Method 1: Look for Radio button (highest priority)
         radioButtons := ""
         try {
             radioButtons := cUIA.FindElements({Name: "Radio", Type: "Button"})
-            MsgBox("Debug: Found " . radioButtons.Length . " Radio buttons", "Radio Button Search", 0)
+            ;MsgBox("Debug: Found " . radioButtons.Length . " Radio buttons", "Radio Button Search", 0)
             
             if (radioButtons.Length > 0) {
                 Echo("Found Radio button - clicking...")
-                MsgBox("About to click Radio button!", "Action", 0)
+                ;MsgBox("About to click Radio button!", "Action", 0)
                 radioButtons[1].Click()
                 Sleep(1000)
-                MsgBox("Radio button clicked! Check if music started.", "Result", 0)
+                ;MsgBox("Radio button clicked! Check if music started.", "Result", 0)
                 Echo("✅ Radio started successfully")
                 return
             }
         } catch Error as e {
-            MsgBox("Radio button search failed: " . e.message, "Radio Error", 0)
+            ;MsgBox("Radio button search failed: " . e.message, "Radio Error", 0)
             Echo("Radio button not found")
         }
         
-        ; Method 2: Look for Shuffle button (second priority)
-        shuffleButtons := ""
-        try {
-            shuffleButtons := cUIA.FindElements({Name: "Shuffle", Type: "Button"})
-            MsgBox("Debug: Found " . shuffleButtons.Length . " Shuffle buttons", "Shuffle Button Search", 0)
-            
-            if (shuffleButtons.Length > 0) {
-                Echo("Found Shuffle button - clicking...")
-                MsgBox("About to click Shuffle button!", "Action", 0)
-                shuffleButtons[1].Click()
-                Sleep(1000)
-                MsgBox("Shuffle button clicked! Check if music started.", "Result", 0)
-                Echo("✅ Shuffle started successfully")
-                return
-            }
-        } catch Error as e {
-            MsgBox("Shuffle button search failed: " . e.message, "Shuffle Error", 0)
-            Echo("Shuffle button not found")
-        }
         
-        ; Method 3: Look for any Play button (third priority)
+        ; Method 2: Look for any Play button (second priority)
         playButtons := ""
         try {
             playButtons := cUIA.FindElements({Name: "Play", Type: "Button"})
-            MsgBox("Debug: Found " . playButtons.Length . " Play buttons", "Play Button Search", 0)
+            ;MsgBox("Debug: Found " . playButtons.Length . " Play buttons", "Play Button Search", 0)
             
             if (playButtons.Length > 0) {
                 Echo("Found " . playButtons.Length . " Play buttons - clicking first one...")
-                MsgBox("About to click first Play button!", "Action", 0)
-                playButtons[1].Click()
+                ;MsgBox("About to click first Play button!", "Action", 0)
+                playButtons[playButtons.Length].Click()
                 Sleep(1000)
-                MsgBox("Play button clicked! Check if music started.", "Result", 0)
+                ;MsgBox("Play button clicked! Check if music started.", "Result", 0)
                 Echo("✅ Play started successfully")
                 return
             }
         } catch Error as e {
-            MsgBox("Play button search failed: " . e.message, "Play Error", 0)
+            ;MsgBox("Play button search failed: " . e.message, "Play Error", 0)
             Echo("Play buttons not found")
         }
         
-        ; Method 4: Keyboard fallback
+        ; Method 3: Keyboard fallback
         Echo("Trying keyboard shortcuts...")
-        MsgBox("No buttons found. Trying keyboard shortcut (Space).", "Fallback", 0)
+        ;MsgBox("No buttons found. Trying keyboard shortcut (Space).", "Fallback", 0)
         cUIA.Send("{Space}")  ; Space to play
         Sleep(1000)
-        MsgBox("Keyboard shortcut attempted. Check if music started.", "Keyboard Result", 0)
+        ;MsgBox("Keyboard shortcut attempted. Check if music started.", "Keyboard Result", 0)
         Echo("Keyboard shortcut attempted")
         
     } catch Error as e {
-        MsgBox("Error in StartRadioUIA: " . e.message, "Fatal Error", 0)
+        ;MsgBox("Error in StartRadioUIA: " . e.message, "Fatal Error", 0)
         Echo("Error in StartRadioUIA: " . e.message)
         ; Final keyboard fallback
         try {
             cUIA.Send("{Enter}")
             Sleep(500)
-            MsgBox("Emergency Enter key pressed.", "Emergency Fallback", 0)
+            ;MsgBox("Emergency Enter key pressed.", "Emergency Fallback", 0)
             Echo("Emergency keyboard fallback used")
         } catch {
-            MsgBox("All methods failed!", "Complete Failure", 0)
+            ;MsgBox("All methods failed!", "Complete Failure", 0)
             Echo("All methods failed")
         }
     }
@@ -429,7 +433,7 @@ EnsureYouTubeMusicOpen() {
     
     ; Open Brave with YouTube Music URL
     Run(BRAVE_PATH . " " . YOUTUBE_MUSIC_URL)
-    Sleep(5000)  ; Wait for browser and page to load
+    Sleep(500)  ; Wait for browser and page to load
     
     ; Wait for browser window to be available
     WinWait("ahk_exe brave.exe", , 10)
@@ -508,17 +512,36 @@ YouTube Music & System Control Script (UIAutomation Enhanced)
 USAGE:
   music_controller.ahk <command> [parameters]
 
-MUSIC COMMANDS:
+MUSIC PLAYBACK COMMANDS:
   play [genre]         - Open YouTube Music and play radio for genre
                         Default: 'chill music'
                         Examples: play jazz, play ""classical music""
   
-  search <term>        - Search for music in YouTube Music
-                        Example: search ""rock music""
-  
   toggle               - Toggle play/pause current music (uses last Play/Pause button)
   
+  next                 - Play next song (Shift+N)
+  
+  previous, prev       - Play previous song (Shift+P)
+  
+  forward [seconds]    - Forward by seconds (default: 10)
+                        Uses 10s + 1s increments (e.g., 32s = 3x10s + 2x1s)
+                        Examples: forward 30, forward 5
+  
+  back [seconds]       - Go back by seconds (default: 10)  
+  rewind [seconds]     - Same as back
+                        Examples: back 15, rewind 45
+  
+  like                 - Like current song (+)
+  
+  dislike              - Dislike current song (-)
+  
+  repeat               - Toggle repeat mode (R)
+  
   toggle-shuffle       - Toggle shuffle mode on/off (uses last Shuffle button)
+
+MUSIC SEARCH COMMANDS:
+  search <term>        - Search for music in YouTube Music
+                        Example: search ""rock music""
 
 SYSTEM VOLUME COMMANDS:
   mute                 - Mute system audio
@@ -532,29 +555,29 @@ OTHER COMMANDS:
 
 EXAMPLES:
   music_controller.ahk play jazz
-  music_controller.ahk search ""study music""
-  music_controller.ahk toggle
+  music_controller.ahk next
+  music_controller.ahk forward 32
+  music_controller.ahk back 15
+  music_controller.ahk like
   music_controller.ahk toggle-shuffle
-  music_controller.ahk get-volume
-  music_controller.ahk volume-up 50    (increase by 50% of current volume)
-  music_controller.ahk volume-down 25  (decrease by 25% of current volume)
-  music_controller.ahk mute
+  music_controller.ahk repeat
 
 NOTES:
 - This script uses UIAutomation v2 for robust browser interaction
 - The script works with YouTube Music in Brave browser
-- Music commands require internet connection
-- The script will open YouTube Music automatically if needed
-- Use quotes around multi-word search terms
-- toggle-shuffle controls the shuffle mode, not playlist starting
-- toggle uses the last Play/Pause button found (main player controls)
+- Music commands require internet connection and YouTube Music to be open
+- Keyboard shortcuts ensure search box focus is cleared before sending commands
+- Time increments use YouTube Music's native 10s and 1s forward/back shortcuts
+- Use quotes around multi-word search terms for play command
 
-IMPROVEMENTS OVER ORIGINAL:
-- Uses UIAutomation v2 for reliable element detection
-- Multiple fallback methods for robust interaction
-- Better error handling and user feedback
-- Separate commands for playlist control vs player controls
-- Visual debugging with message boxes
+KEYBOARD SHORTCUTS USED:
+- Play/Pause: Space
+- Next: Shift+N  
+- Previous: Shift+P
+- Forward 10s: L, Forward 1s: Shift+L
+- Back 10s: H, Back 1s: Shift+H
+- Like: +, Dislike: -
+- Repeat: R, Shuffle: S (via button click)
     )"
     
     Echo(helpText)
@@ -577,14 +600,14 @@ ToggleShuffleMode() {
     try {
         ; Find all Shuffle buttons and use the last one (usually the player control)
         shuffleButtons := cUIA.FindElements({Name: "Shuffle", Type: "Button"})
-        MsgBox("Debug: Found " . shuffleButtons.Length . " Shuffle buttons for toggle", "Toggle Shuffle Debug", 0)
+        ;MsgBox("Debug: Found " . shuffleButtons.Length . " Shuffle buttons for toggle", "Toggle Shuffle Debug", 0)
         
         if (shuffleButtons.Length > 0) {
             ; Use the last shuffle button (typically the player control)
             lastShuffleBtn := shuffleButtons[shuffleButtons.Length]
-            MsgBox("About to toggle shuffle mode using last Shuffle button!", "Toggle Shuffle Action", 0)
+            ;MsgBox("About to toggle shuffle mode using last Shuffle button!", "Toggle Shuffle Action", 0)
             lastShuffleBtn.Click()
-            MsgBox("Shuffle mode toggled! Check the player.", "Toggle Shuffle Result", 0)
+            ;MsgBox("Shuffle mode toggled! Check the player.", "Toggle Shuffle Result", 0)
             Echo("Shuffle mode toggled")
         } else {
             throw Error("No Shuffle buttons found")
@@ -593,5 +616,193 @@ ToggleShuffleMode() {
     } catch Error as e {
         Echo("Error toggling shuffle mode: " . e.message)
         throw Error("Failed to toggle shuffle mode")
+    }
+}
+
+; Ensure focus is on the main player area, not search box
+EnsurePlayerFocus(cUIA) {
+    try {
+        ; Try to click on main content area to remove focus from search box
+        try {
+            ; Look for main content or player area
+            mainContent := cUIA.FindElement({Type: "Main"})
+            if (mainContent) {
+                mainContent.Click()
+                Sleep(200)
+                return
+            }
+        } catch {
+            ; Fallback: click on a safe area of the page
+            try {
+                cUIA.Send("{Esc}")  ; Escape key often removes focus from search
+                Sleep(200)
+            } catch {
+                ; Final fallback: click at a safe coordinate
+                WinActivate("ahk_exe brave.exe")
+                Sleep(200)
+            }
+        }
+    } catch {
+        Echo("Warning: Could not ensure player focus")
+    }
+}
+
+; Play next song
+NextSong() {
+    cUIA := GetYouTubeMusicBrowser()
+    if (!cUIA) {
+        throw Error("YouTube Music not found. Use 'play' command first.")
+    }
+    
+    try {
+        EnsurePlayerFocus(cUIA)
+        ;MsgBox("Sending next song command (Shift+N)", "Next Song", 0)
+        cUIA.Send("+n")  ; Shift+N
+        Echo("Next song command sent")
+    } catch Error as e {
+        Echo("Error playing next song: " . e.message)
+        throw Error("Failed to play next song")
+    }
+}
+
+; Play previous song
+PreviousSong() {
+    cUIA := GetYouTubeMusicBrowser()
+    if (!cUIA) {
+        throw Error("YouTube Music not found. Use 'play' command first.")
+    }
+    
+    try {
+        EnsurePlayerFocus(cUIA)
+        ;MsgBox("Sending previous song command (Shift+P)", "Previous Song", 0)
+        cUIA.Send("+p")  ; Shift+P
+        Echo("Previous song command sent")
+    } catch Error as e {
+        Echo("Error playing previous song: " . e.message)
+        throw Error("Failed to play previous song")
+    }
+}
+
+; Forward by specified seconds (using 10s and 1s increments)
+ForwardSeconds(seconds) {
+    cUIA := GetYouTubeMusicBrowser()
+    if (!cUIA) {
+        throw Error("YouTube Music not found. Use 'play' command first.")
+    }
+    
+    try {
+        EnsurePlayerFocus(cUIA)
+        
+        ; Calculate 10s and 1s increments
+        tens := seconds // 10
+        ones := seconds - (tens * 10)
+        
+        ;MsgBox("Forwarding " . seconds . " seconds (" . tens . "x10s + " . ones . "x1s)", "Forward", 0)
+        
+        ; Send 10-second forwards (l key)
+        Loop tens {
+            cUIA.Send("l")
+            Sleep(100)
+        }
+        
+        ; Send 1-second forwards (Shift+l)
+        Loop ones {
+            cUIA.Send("+l")
+            Sleep(100)
+        }
+        
+        Echo("Forwarded " . seconds . " seconds")
+    } catch Error as e {
+        Echo("Error forwarding: " . e.message)
+        throw Error("Failed to forward")
+    }
+}
+
+; Back by specified seconds (using 10s and 1s increments)
+BackSeconds(seconds) {
+    cUIA := GetYouTubeMusicBrowser()
+    if (!cUIA) {
+        throw Error("YouTube Music not found. Use 'play' command first.")
+    }
+    
+    try {
+        EnsurePlayerFocus(cUIA)
+        
+        ; Calculate 10s and 1s increments
+        tens := seconds // 10
+        ones := seconds - (tens * 10)
+        
+        ;MsgBox("Going back " . seconds . " seconds (" . tens . "x10s + " . ones . "x1s)", "Back", 0)
+        
+        ; Send 10-second backs (h key)
+        Loop tens {
+            cUIA.Send("h")
+            Sleep(100)
+        }
+        
+        ; Send 1-second backs (Shift+h)
+        Loop ones {
+            cUIA.Send("+h")
+            Sleep(100)
+        }
+        
+        Echo("Went back " . seconds . " seconds")
+    } catch Error as e {
+        Echo("Error going back: " . e.message)
+        throw Error("Failed to go back")
+    }
+}
+
+; Like current song
+LikeSong() {
+    cUIA := GetYouTubeMusicBrowser()
+    if (!cUIA) {
+        throw Error("YouTube Music not found. Use 'play' command first.")
+    }
+    
+    try {
+        EnsurePlayerFocus(cUIA)
+        ;MsgBox("Liking current song (+)", "Like Song", 0)
+        cUIA.Send("{+}")  ; Plus key
+        Echo("Song liked")
+    } catch Error as e {
+        Echo("Error liking song: " . e.message)
+        throw Error("Failed to like song")
+    }
+}
+
+; Dislike current song
+DislikeSong() {
+    cUIA := GetYouTubeMusicBrowser()
+    if (!cUIA) {
+        throw Error("YouTube Music not found. Use 'play' command first.")
+    }
+    
+    try {
+        EnsurePlayerFocus(cUIA)
+        ;MsgBox("Disliking current song (-)", "Dislike Song", 0)
+        cUIA.Send("{-}")  ; Minus key
+        Echo("Song disliked")
+    } catch Error as e {
+        Echo("Error disliking song: " . e.message)
+        throw Error("Failed to dislike song")
+    }
+}
+
+; Toggle repeat mode
+ToggleRepeat() {
+    cUIA := GetYouTubeMusicBrowser()
+    if (!cUIA) {
+        throw Error("YouTube Music not found. Use 'play' command first.")
+    }
+    
+    try {
+        EnsurePlayerFocus(cUIA)
+        ;MsgBox("Toggling repeat mode (R)", "Toggle Repeat", 0)
+        cUIA.Send("r")  ; R key
+        Echo("Repeat mode toggled")
+    } catch Error as e {
+        Echo("Error toggling repeat: " . e.message)
+        throw Error("Failed to toggle repeat")
     }
 } 

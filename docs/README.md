@@ -151,6 +151,28 @@ The system will:
 4. Process the transcription with an LLM
 5. Execute the appropriate tool based on your request
 
+## Available Tools
+
+The system includes several built-in tools for system control:
+
+### Music Controller
+The Music Controller provides comprehensive YouTube Music control via voice commands. It supports playback control, music search, time navigation, and volume management.
+
+**Documentation**: See [MUSIC_CONTROLLER.md](MUSIC_CONTROLLER.md) for complete command reference and usage examples.
+
+**Voice Commands Examples**:
+- *"Play some jazz music"* - Searches and plays jazz on YouTube Music
+- *"Next song"* - Skips to the next track
+- *"Go back 30 seconds"* - Rewinds the current song
+- *"Turn up the volume"* - Increases system volume
+- *"Like this song"* - Likes the currently playing track
+
+### Volume Control
+System volume management with relative adjustments and mute functionality.
+
+### System Control
+Basic system operations like sleep mode (use with caution in testing).
+
 ## Testing
 
 ### Testing the Full System
