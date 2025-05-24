@@ -11,12 +11,17 @@ class LiteLLMSettings(BaseModel):
     model: str = Field(default="gpt-3.5-turbo")
     api_key: Optional[str] = Field(default=None)
 
+class TranscriptionSettings(BaseModel):
+    whisper_instructions: Optional[str] = Field(default=None, description="Instructions to provide to Whisper for better transcription accuracy")
+    language: Optional[str] = Field(default=None, description="Language code for Whisper (e.g., 'en', 'es', 'fr')")
+    temperature: float = Field(default=0.0, description="Sampling temperature for Whisper (0.0 = deterministic)")
+
 class AudioSettings(BaseModel):
     input_device_index: Optional[int] = Field(default=None)
     input_device_name_keyword: Optional[str] = Field(default=None, description="Keyword to match in the device name. If provided, will override input_device_index.")
     sample_rate: int = Field(default=16000)
     wake_word_sensitivity: float = Field(default=0.5)
-    silence_threshold_seconds: float = Field(default=2.0)
+    silence_threshold_seconds: float = Field(default=4.0, description="How long to wait for silence before stopping voice recording (in seconds). Increase for longer speech, decrease for quicker responses.")
 
 class PathsSettings(BaseModel):
     autohotkey_exe: FilePath
@@ -34,6 +39,7 @@ class LoggingSettings(BaseModel):
 class AppSettings(BaseModel):
     groq_api_key: str
     litellm_settings: LiteLLMSettings = Field(default_factory=LiteLLMSettings)
+    transcription_settings: TranscriptionSettings = Field(default_factory=TranscriptionSettings)
     audio_settings: AudioSettings = Field(default_factory=AudioSettings)
     paths: PathsSettings
     logging: LoggingSettings = Field(default_factory=LoggingSettings)

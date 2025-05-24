@@ -155,17 +155,20 @@ class WakeWordDetector:
     def _reset_model_state(self):
         """Reset the openwakeword model state to prevent continuous detections."""
         try:
-            # Instead of reinitializing the whole model, just clear the internal buffer
-            # This is much faster and sufficient to prevent continuous detections
-            app_logger.debug("Clearing wake word model buffer...")
-            # The model maintains an internal buffer, so we'll just force a few predictions
-            # with zeros to clear it instead of full reinitialization
+            app_logger.debug("Resetting wake word model state...")
+            
             if hasattr(self, 'oww'):
-                # Create a small silent audio chunk to clear the buffer
+                # Create silent audio to flush the model's internal buffer more thoroughly
+                # Use multiple chunks to ensure complete clearing
                 silent_chunk = np.zeros(self.chunk_size, dtype=np.int16)
-                # Process a couple of silent chunks to clear the internal state
-                for _ in range(2):
+                
+                # Process several silent chunks to clear the internal state completely
+                # This ensures any residual audio patterns are cleared
+                for i in range(5):  # Increased from 2 to 5 for better clearing
                     self.oww.predict(silent_chunk)
+                    
+                app_logger.debug("Wake word model buffer cleared with 5 silent predictions")
+                
         except Exception as e:
             app_logger.error(f"Error resetting model state: {e}")
 
@@ -199,11 +202,15 @@ class WakeWordDetector:
                     app_logger.info(f"Wake word '{self.active_model}' detected with score {prediction[self.active_model]:.2f}!")
                     self.stop_listening()
                     
-                    # Quick reset to prevent continuous detection
+                    # Improved reset to prevent continuous detection
                     self._reset_model_state()
                     
-                    # Minimal delay to prevent immediate re-triggering - reduced from 0.2s to 0.05s
-                    time.sleep(0.05)
+                    # Add a longer cooldown period to prevent immediate re-triggering
+                    # This gives time for any residual audio/echo to clear
+                    cooldown_time = 0.3  # Increased from 0.05s to 0.3s
+                    app_logger.debug(f"Wake word cooldown period: {cooldown_time}s")
+                    time.sleep(cooldown_time)
+                    
                     return True
 
         except Exception as e:

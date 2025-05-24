@@ -50,6 +50,43 @@ cp config.template.json config.json
 
 ## Configuration
 
+The system uses a `config.json` file based on `config.template.json`. Key configuration options:
+
+### API Keys
+- **groq_api_key**: Your Groq API key for transcription and LLM services
+- **litellm_settings**: Configuration for the LLM provider (currently using Groq's qwen-qwq-32b)
+
+### Transcription Settings (NEW)
+- **whisper_instructions**: Custom instructions to improve transcription accuracy for voice commands
+- **language**: Optional language code for Whisper (e.g., 'en', 'es', 'fr')  
+- **temperature**: Sampling temperature for Whisper (0.0 = deterministic)
+
+### Audio Settings
+
+Key audio configuration options in your `config.json`:
+
+- **input_device_index**: Set to `null` for default microphone or specify index
+- **input_device_name_keyword**: Set to a keyword to find a microphone by name (e.g., "W2G" or "USB"). This will override `input_device_index` if both are provided.
+- **sample_rate**: Audio sample rate (default: 16000 Hz)
+- **wake_word_sensitivity**: Threshold for wake word detection (0.0-1.0, default: 0.5)
+- **silence_threshold_seconds**: How long to wait for silence before stopping voice recording (default: 4.0 seconds)
+  - **Increase this value** (e.g., 6.0-8.0) if you need more time to speak longer commands
+  - **Decrease this value** (e.g., 2.0-3.0) for quicker responses to short commands
+  - Recommended range: 2.0-8.0 seconds
+
+Example audio settings:
+```json
+"audio_settings": {
+  "input_device_index": null,
+  "input_device_name_keyword": "W2G",
+  "sample_rate": 16000,
+  "wake_word_sensitivity": 0.5,
+  "silence_threshold_seconds": 4.0
+}
+```
+
+### Paths Settings
+
 Edit the `config.json` file to configure the following:
 
 ```json

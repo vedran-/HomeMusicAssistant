@@ -57,7 +57,7 @@ Wake Word Detection → Audio Capture → Transcription (Groq) → LLM (qwen-qwq
 ```
 
 ## Available Tools (LLM Recognized & Working)
-- `play_music`: Music playback control (play, pause, toggle, next, previous)
+- `play_music`: Music playback control (play, pause, toggle, next, previous) + **NEW**: Supports any music search term (artists, songs, genres, albums, movies, etc.)
 - `control_volume`: System volume control (up, down, mute, unmute, with amounts)
 - `system_control`: System operations (sleep, shutdown) - **USE WITH CAUTION**
 - `unknown_request`: Fallback for unrecognized requests

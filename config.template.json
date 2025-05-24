@@ -5,12 +5,17 @@
     "model": "gpt-3.5-turbo",
     "api_key": "YOUR_LLM_API_KEY_IF_NEEDED"
   },
+  "transcription_settings": {
+    "whisper_instructions": "You are transcribing voice commands for a home automation system. Focus on accuracy for commands like 'play music', 'volume up', 'mute', etc. Provide clear, concise transcription.",
+    "language": null,
+    "temperature": 0.0
+  },
   "audio_settings": {
     "input_device_index": null,
     "input_device_name_keyword": null,
     "sample_rate": 16000,
     "wake_word_sensitivity": 0.5,
-    "silence_threshold_seconds": 2.0
+    "silence_threshold_seconds": 3.0
   },
   "paths": {
     "autohotkey_exe": "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe",

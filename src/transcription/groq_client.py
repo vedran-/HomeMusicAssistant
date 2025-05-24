@@ -30,12 +30,27 @@ class GroqTranscriber:
                 # The 'file' parameter should be a tuple: (filename, file_content_bytes)
                 file_content = audio_file.read()
                 
-                transcription_response = self.client.audio.transcriptions.create(
-                    file=(os.path.basename(audio_file_path), file_content),
-                    model=self.model
-                    # language="en", # Optional
-                    # response_format="json", # Default is json with a "text" field
-                )
+                # Build transcription parameters
+                params = {
+                    "file": (os.path.basename(audio_file_path), file_content),
+                    "model": self.model,
+                    "response_format": "json"  # Ensure we get json response
+                }
+                
+                # Add transcription settings if configured
+                if self.settings.transcription_settings.whisper_instructions:
+                    params["prompt"] = self.settings.transcription_settings.whisper_instructions
+                    app_logger.debug(f"Using whisper instructions: {self.settings.transcription_settings.whisper_instructions[:100]}...")
+                
+                if self.settings.transcription_settings.language:
+                    params["language"] = self.settings.transcription_settings.language
+                    app_logger.debug(f"Using language: {self.settings.transcription_settings.language}")
+                
+                if self.settings.transcription_settings.temperature != 0.0:
+                    params["temperature"] = self.settings.transcription_settings.temperature
+                    app_logger.debug(f"Using temperature: {self.settings.transcription_settings.temperature}")
+                
+                transcription_response = self.client.audio.transcriptions.create(**params)
             
             app_logger.info("Transcription successful.")
             return transcription_response.text

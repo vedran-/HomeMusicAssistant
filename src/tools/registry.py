@@ -83,6 +83,7 @@ class ToolRegistry:
     def _execute_play_music(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute music playback commands."""
         action = parameters.get("action", "play")
+        search_term = parameters.get("search_term")
         
         # Map LLM actions to music_controller.ahk commands
         command_map = {
@@ -101,19 +102,27 @@ class ToolRegistry:
             }
         
         script_path = self.scripts_dir / "music_controller.ahk"
-        command = command_map[action]
+        command = command_map[action].copy()  # Make a copy to avoid modifying the original
+        
+        # Add search term for play action
+        if action == "play" and search_term:
+            command.append(search_term)
+            app_logger.info(f"Playing music: {search_term}")
         
         result = self._run_autohotkey_script(script_path, command)
         
         if result["success"]:
-            feedback_map = {
-                "play": "Playing music",
-                "pause": "Music paused",
-                "toggle": "Music toggled",
-                "next": "Playing next track",
-                "previous": "Playing previous track"
-            }
-            result["feedback"] = feedback_map.get(action, f"Music {action} executed")
+            if action == "play" and search_term:
+                result["feedback"] = f"Playing: {search_term}"
+            else:
+                feedback_map = {
+                    "play": "Playing music",
+                    "pause": "Music paused",
+                    "toggle": "Music toggled",
+                    "next": "Playing next track",
+                    "previous": "Playing previous track"
+                }
+                result["feedback"] = feedback_map.get(action, f"Music {action} executed")
         
         return result
 
@@ -295,22 +304,49 @@ class ToolRegistry:
             True if AutoHotkey is working, False otherwise
         """
         try:
-            # Test with a simple AutoHotkey command (just check if executable exists and runs)
-            # AutoHotkey v2 doesn't support --version, so we'll just run it with /? for help
-            result = subprocess.run(
-                [self.autohotkey_exe, "/?"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            # Test by running a simple script that just exits successfully
+            # This is more reliable than trying to get version info
+            test_script_content = """
+; Simple test script that exits with code 0
+ExitApp(0)
+"""
             
-            # AutoHotkey /? returns exit code 1 but shows help - this is expected
-            if result.returncode in [0, 1]:
-                app_logger.info(f"AutoHotkey test successful (exit code: {result.returncode})")
-                return True
-            else:
-                app_logger.error(f"AutoHotkey test failed with exit code: {result.returncode}")
-                return False
+            # Create a temporary test script
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.ahk', delete=False) as temp_file:
+                temp_file.write(test_script_content)
+                temp_script_path = temp_file.name
+            
+            try:
+                # Run the temporary script
+                result = subprocess.run(
+                    [self.autohotkey_exe, temp_script_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                
+                # Clean up the temporary file
+                import os
+                os.unlink(temp_script_path)
+                
+                if result.returncode == 0:
+                    app_logger.info(f"AutoHotkey connection test successful")
+                    return True
+                else:
+                    app_logger.error(f"AutoHotkey test failed with exit code: {result.returncode}")
+                    if result.stderr:
+                        app_logger.error(f"AutoHotkey stderr: {result.stderr}")
+                    return False
+                    
+            except Exception as e:
+                # Clean up the temporary file even if there's an exception
+                import os
+                try:
+                    os.unlink(temp_script_path)
+                except:
+                    pass
+                raise e
                 
         except Exception as e:
             app_logger.error(f"AutoHotkey test failed: {e}")

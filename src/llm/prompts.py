@@ -17,6 +17,7 @@ call the 'unknown_request' tool with a brief explanation.
 
 Examples:
 - If user says "play some music" → call play_music with action="play"
+- If user says "play Boards of Canada" → call play_music with action="play" (can play any artist/song/genre)
 - If user says "turn up the volume" → call control_volume with action="up"
 - If user says "put the computer to sleep" → call system_control with action="sleep"
 - If user says "what time is it" → call unknown_request with reason="No tool available for time queries"
@@ -36,14 +37,18 @@ def get_available_tools() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "play_music",
-                "description": "Control music playback",
+                "description": "Play any music based on user request - supports artists, songs, genres, albums, movies, or any music-related query. Can also control playback (play, pause, toggle, next, previous).",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
                             "enum": ["play", "pause", "toggle", "next", "previous"],
-                            "description": "The action to perform on music playback"
+                            "description": "The action to perform on music playback. Use 'play' for any music request."
+                        },
+                        "search_term": {
+                            "type": "string",
+                            "description": "What to play - artist name, song title, genre, album, or any music search term. Only used with 'play' action."
                         }
                     },
                     "required": ["action"]
