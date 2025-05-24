@@ -174,102 +174,216 @@ SearchMusicUIA(cUIA, searchTerm) {
         ; Wait for page to load completely
         Sleep(200)
         
-        ; Method 1: Try to find search box by common selectors
+        ; Method 1: Try to find search box directly first (most reliable)
         searchBox := ""
         try {
+            ; Try by AutomationId (id="input" in HTML)
             searchBox := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
         } catch {
             try {
-                searchBox := cUIA.FindElement({Name: "Search", Type: "Edit"})
+                ; Try by role and placeholder text
+                searchBox := cUIA.FindElement({Type: "Edit", Name: "Search songs, albums, artists, podcasts"})
             } catch {
                 try {
-                    searchBox := cUIA.FindElement({Name: "Search YouTube Music", Type: "Edit"})
+                    ; Try by general search terms
+                    searchBox := cUIA.FindElement({Name: "Search", Type: "Edit"})
                 } catch {
-                    ; Try finding by placeholder text
                     try {
+                        ; Try finding by placeholder text pattern
                         searchBox := cUIA.FindElement({Type: "Edit", matchMode: 2, Name: "Search"})
                     }
                 }
             }
         }
         
-        if (!searchBox) {
-            ; Method 2: Try clicking search icon first
-            try {
-                searchIcon := cUIA.FindElement({Name: "Search", Type: "Button"})
-                searchIcon.Click()
-                Sleep(200)
-                searchBox := cUIA.FindElement({Type: "Edit"})
-            } catch {
-                ; Method 3: Use keyboard shortcut to open search
-                cUIA.Send("/")
-                Sleep(200)
-                ; Focus should now be on search box
-            }
-        }
-        
+        ; If search box found directly, clear and use it
         if (searchBox) {
-            ; Clear existing content and type search term - Enhanced clearing
+            ; Clear using the dedicated clear button first
+            ClearSearchBox(cUIA)
+            Sleep(100)
+            
+            ; Set focus and enter search term
             searchBox.SetFocus()
             Sleep(100)
             
-            ; Multiple clearing attempts to ensure empty search box
-            searchBox.SetValue("")  ; Try direct clearing first
+            ; Ensure box is really empty before setting value
+            searchBox.SetValue("")
             Sleep(50)
-            cUIA.Send("^a")  ; Select all
-            Sleep(50)
-            cUIA.Send("{Delete}")  ; Delete selected content
-            Sleep(50)
-            cUIA.Send("^a")  ; Select again in case anything remains
-            Sleep(50)
-            cUIA.Send("{Backspace}")  ; Backspace as additional clearing
-            Sleep(50)
-            
-            ; Now enter the search term
             searchBox.SetValue(searchTerm)
             Sleep(200)
             
             ; Press Enter to search
             cUIA.Send("{Enter}")
+            Echo("Search completed using direct input method")
         } else {
-            ; Fallback: Use global search hotkey and type - Enhanced clearing
+            ; Method 2: Try activating search mode first, then find input
+            Echo("Direct search box not found, activating search mode...")
+            
+            ; Make sure we're not already in search mode by pressing Escape first
+            cUIA.Send("{Escape}")
+            Sleep(100)
+            
+            ; Now trigger search mode with "/"
             cUIA.Send("/")
-            Sleep(200)
-            ; Multiple clearing attempts for keyboard fallback
-            cUIA.Send("^a")  ; Select all
-            Sleep(50)
-            cUIA.Send("{Delete}")  ; Delete
-            Sleep(50)
-            cUIA.Send("^a")  ; Select all again
-            Sleep(50)
-            cUIA.Send("{Backspace}")  ; Backspace
-            Sleep(50)
-            cUIA.Send(searchTerm)
-            Sleep(200)
-            cUIA.Send("{Enter}")
+            Sleep(300)
+            
+            ; Try to find the search box again after activating search
+            try {
+                searchBox := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
+                if (searchBox) {
+                    ; Clear any existing content
+                    searchBox.SetValue("")
+                    Sleep(50)
+                    searchBox.SetValue(searchTerm)
+                    Sleep(200)
+                    cUIA.Send("{Enter}")
+                    Echo("Search completed using activated search mode")
+                } else {
+                    ; Final keyboard fallback - type directly after "/"
+                    cUIA.Send(searchTerm)
+                    Sleep(200)
+                    cUIA.Send("{Enter}")
+                    Echo("Search completed using keyboard fallback")
+                }
+            } catch {
+                ; Ultimate fallback - type directly
+                cUIA.Send(searchTerm)
+                Sleep(200)
+                cUIA.Send("{Enter}")
+                Echo("Search completed using ultimate keyboard fallback")
+            }
         }
         
         ; Wait for search results
         Sleep(2000)
         
     } catch Error as e {
-        Echo("Search error: " . e.message . " - Using keyboard fallback")
-        ; Fallback to original keyboard method with enhanced clearing
+        Echo("Search error: " . e.message . " - Using emergency fallback")
+        ; Emergency fallback - ensure clean state first
+        cUIA.Send("{Escape}")
+        Sleep(200)
         cUIA.Send("/")
         Sleep(300)
-        ; Enhanced clearing for error fallback
-        cUIA.Send("^a")  ; Select all
-        Sleep(100)
-        cUIA.Send("{Delete}")  ; Delete
-        Sleep(100)
-        cUIA.Send("^a")  ; Select all again  
-        Sleep(100)
-        cUIA.Send("{Backspace}")  ; Backspace
-        Sleep(100)
         cUIA.Send(searchTerm)
         Sleep(300)
         cUIA.Send("{Enter}")
         Sleep(1500)
+    }
+}
+
+; Clear the search box using YouTube Music's dedicated clear button
+ClearSearchBox(cUIA) {
+    try {
+        ; Method 1: Try to find clear button by ID and title (most reliable)
+        clearButton := ""
+        try {
+            ; Look for clear button by AutomationId (id="clear-button" in HTML)
+            clearButton := cUIA.FindElement({AutomationId: "clear-button"})
+        } catch {
+            try {
+                ; Look for clear button by title attribute
+                clearButton := cUIA.FindElement({Name: "Clear", Type: "Button"})
+            } catch {
+                try {
+                    ; Look for button with aria-label="Clear"
+                    clearButtons := cUIA.FindElements({Type: "Button"})
+                    for button in clearButtons {
+                        try {
+                            if (button.GetAttribute("aria-label") = "Clear") {
+                                clearButton := button
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (clearButton) {
+            ; Check if clear button is visible/enabled before clicking
+            try {
+                if (clearButton.IsEnabled) {
+                    clearButton.Click()
+                    Sleep(200)
+                    Echo("Search box cleared using clear button")
+                    
+                    ; Double-check by also doing direct clear on input
+                    try {
+                        searchInput := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
+                        if (searchInput) {
+                            searchInput.SetValue("")
+                            Sleep(100)
+                        }
+                    }
+                    return true
+                }
+            } catch {
+                ; Button might exist but not be clickable
+            }
+        }
+        
+        ; Method 2: Direct input clearing (more aggressive)
+        Echo("Clear button not found, using direct input clearing")
+        try {
+            ; Focus on search box first
+            searchInput := cUIA.FindElement({AutomationId: "input", Type: "Edit"})
+            if (searchInput) {
+                searchInput.SetFocus()
+                Sleep(100)
+                
+                ; Multiple clearing methods to ensure empty box
+                searchInput.SetValue("")  ; Direct clear
+                Sleep(50)
+                
+                ; Additional keyboard clearing as backup
+                cUIA.Send("^a")  ; Select all
+                Sleep(50)
+                cUIA.Send("{Delete}")  ; Delete
+                Sleep(50)
+                
+                ; Verify it's really empty
+                searchInput.SetValue("")  ; Final direct clear
+                Sleep(100)
+                
+                Echo("Search box cleared using direct input method")
+                return true
+            }
+        } catch {
+            ; Method 3: Keyboard-only fallback (most aggressive)
+            Echo("Using keyboard-only clearing fallback")
+            try {
+                ; Press Escape first to ensure we're in clean state
+                cUIA.Send("{Escape}")
+                Sleep(100)
+                
+                ; Activate search if needed
+                cUIA.Send("/")
+                Sleep(200)
+                
+                ; Clear everything
+                cUIA.Send("^a")  ; Select all
+                Sleep(100)
+                cUIA.Send("{Delete}")  ; Delete
+                Sleep(100)
+                cUIA.Send("^a")  ; Select all again (in case anything remains)
+                Sleep(50)
+                cUIA.Send("{Backspace}")  ; Backspace
+                Sleep(100)
+                
+                ; Press Escape to exit search mode cleanly
+                cUIA.Send("{Escape}")
+                Sleep(100)
+                
+                Echo("Search box cleared using keyboard fallback")
+                return true
+            }
+        }
+        
+        return false
+        
+    } catch Error as e {
+        Echo("Error clearing search box: " . e.message)
+        return false
     }
 }
 
@@ -540,21 +654,23 @@ MUSIC PLAYBACK COMMANDS:
   toggle-shuffle       - Toggle shuffle mode on/off (uses last Shuffle button)
 
 MUSIC SEARCH COMMANDS:
-  search <term>        - Search for music in YouTube Music
+  search <term>        - Search for music in YouTube Music using enhanced search
+                        Automatically clears previous search using YouTube's clear button
                         Example: search ""rock music""
 
 SYSTEM VOLUME COMMANDS:
   mute                 - Mute system audio
   unmute               - Unmute system audio
   get-volume           - Get current system volume percentage
-  volume-up [percent]  - Increase volume by percentage of current volume (default: 10%)
-  volume-down [percent]- Decrease volume by percentage of current volume (default: 10%)
+  volume-up [percent]  - Increase volume by percentage of current volume (default: 100%)
+  volume-down [percent]- Decrease volume by percentage of current volume (default: 50%)
 
 OTHER COMMANDS:
   help                 - Show this help
 
 EXAMPLES:
   music_controller.ahk play jazz
+  music_controller.ahk search ""nirvana unplugged""
   music_controller.ahk next
   music_controller.ahk forward 32
   music_controller.ahk back 15
@@ -564,11 +680,17 @@ EXAMPLES:
 
 NOTES:
 - This script uses UIAutomation v2 for robust browser interaction
+- Enhanced search functionality targets YouTube Music's HTML elements directly
+- Search automatically clears previous terms using YouTube's dedicated clear button
 - The script works with YouTube Music in Brave browser
 - Music commands require internet connection and YouTube Music to be open
-- Keyboard shortcuts ensure search box focus is cleared before sending commands
-- Time increments use YouTube Music's native 10s and 1s forward/back shortcuts
-- Use quotes around multi-word search terms for play command
+- Use quotes around multi-word search terms for search commands
+
+SEARCH IMPROVEMENTS:
+- Uses id=""input"" targeting for reliable search box detection  
+- Automatically clicks YouTube's clear button (id=""clear-button"") before searching
+- Fallback methods ensure search works even if UI elements change
+- Better error handling with multiple detection strategies
 
 KEYBOARD SHORTCUTS USED:
 - Play/Pause: Space

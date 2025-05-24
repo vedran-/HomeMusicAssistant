@@ -188,12 +188,12 @@ class WakeWordDetector:
             )
             app_logger.info(f"Listening for wake word '{self.active_model}'...")
 
-            streams_to_skip = 0
+            chunks_to_skip = 0
             while True:
                 audio_chunk = self.stream.read(self.chunk_size, exception_on_overflow=False)
                 
-                if streams_to_skip > 0:
-                    streams_to_skip -= 1
+                if chunks_to_skip > 0:
+                    chunks_to_skip -= 1
                     continue
                 
                 # Convert the audio bytes to the right format
@@ -212,10 +212,10 @@ class WakeWordDetector:
                     
                     # Add a longer cooldown period to prevent immediate re-triggering
                     # This gives time for any residual audio/echo to clear
-                    cooldown_time = 0.05  # Increased from 0.05s to 0.3s
+                    cooldown_time = 0.3
                     app_logger.debug(f"Wake word cooldown period: {cooldown_time}s")
                     time.sleep(cooldown_time)
-                    streams_to_skip = 7
+                    chunks_to_skip = 7
                     
                     return True
 

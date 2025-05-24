@@ -15,9 +15,17 @@ IMPORTANT: You should ONLY respond by calling a tool. DO NOT respond with genera
 If you cannot determine which tool to call, or if the user's request doesn't match any available tool, 
 call the 'unknown_request' tool with a brief explanation.
 
+CRITICAL RULE FOR MUSIC: Whenever the user says "play" followed by ANYTHING, always use the play_music tool with action="play" and search_term set to whatever they want to play. Do NOT use unknown_request for play commands - the music system can search for anything.
+
 Examples:
 - If user says "play some music" → call play_music with action="play"
 - If user says "play Boards of Canada" → call play_music with action="play", search_term="Boards of Canada"
+- If user says "play Magazines" → call play_music with action="play", search_term="Magazines"
+- If user says "play rock music" → call play_music with action="play", search_term="rock music"
+- If user says "play that song from the movie" → call play_music with action="play", search_term="that song from the movie"
+- If user says "play anything" → call play_music with action="play", search_term="anything"
+- If user says "play jazz" → call play_music with action="play", search_term="jazz"
+- If user says "play The Beatles" → call play_music with action="play", search_term="The Beatles"
 - If user says "next song" → call music_control with action="next"
 - If user says "go back 30 seconds" → call music_control with action="back", amount=30
 - If user says "like this song" → call music_control with action="like"
@@ -41,7 +49,7 @@ def get_available_tools() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "play_music",
-                "description": "Play any music based on user request - supports artists, songs, genres, albums, movies, or any music-related query. Can also control basic playback (play, pause, toggle, next, previous).",
+                "description": "Play ANY music or audio content based on user request. This tool accepts ANY search term - artist names, song titles, genres, albums, movie soundtracks, band names, random words, or any music-related query. The music system will search for whatever is provided. ALWAYS use this tool when user says 'play' followed by anything.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -52,7 +60,7 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         },
                         "search_term": {
                             "type": "string",
-                            "description": "What to play - artist name, song title, genre, album, or any music search term. Only used with 'play' action."
+                            "description": "What to play - can be ANYTHING: artist name, song title, genre, album, band name, random word, or any search term. The music system will search for whatever is provided."
                         }
                     },
                     "required": ["action"]
