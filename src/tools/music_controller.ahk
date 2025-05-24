@@ -687,31 +687,45 @@ ToggleShuffleMode() {
     }
 }
 
-; Ensure focus is on the main player area, not search box
-EnsurePlayerFocus(cUIA) {
+; Aggressive focus clearing for keyboard shortcuts
+AggressiveFocusClear(cUIA) {
     try {
-        ; Try to click on main content area to remove focus from search box
+        ; Method 1: Click on player controls area (most reliable)
         try {
-            ; Look for main content or player area
-            mainContent := cUIA.FindElement({Type: "Main"})
-            if (mainContent) {
-                mainContent.Click()
-                Sleep(200)
+            ; Try to find any player button (Play, Pause, etc.) and click nearby
+            playerButtons := cUIA.FindElements({Name: "Play", Type: "Button"})
+            if (playerButtons.Length == 0) {
+                playerButtons := cUIA.FindElements({Name: "Pause", Type: "Button"})
+            }
+            if (playerButtons.Length > 0) {
+                ; Click on the last (main) player button area
+                playerButtons[playerButtons.Length].Click()
+                Sleep(100)
                 return
             }
         } catch {
-            ; Fallback: click on a safe area of the page
-            try {
-                cUIA.Send("{Esc}")  ; Escape key often removes focus from search
-                Sleep(200)
-            } catch {
-                ; Final fallback: click at a safe coordinate
-                WinActivate("ahk_exe brave.exe")
-                Sleep(200)
-            }
+            ; Continue to next method
         }
+        
+        ; Method 2: Multiple escapes + window activation
+        cUIA.Send("{Esc}{Esc}")
+        Sleep(100)
+        WinActivate("ahk_exe brave.exe")
+        Sleep(100)
+        
+        ; Method 3: Click at center-bottom area (where player usually is)
+        try {
+            WinGetPos(&x, &y, &width, &height, "ahk_exe brave.exe")
+            centerX := x + (width // 2)
+            playerY := y + height - 150  ; Bottom area where player controls are
+            Click(centerX, playerY)
+            Sleep(100)
+        } catch {
+            Echo("Warning: Could not clear focus completely")
+        }
+        
     } catch {
-        Echo("Warning: Could not ensure player focus")
+        Echo("Warning: Focus clearing failed")
     }
 }
 
@@ -723,10 +737,23 @@ NextSong() {
     }
     
     try {
-        EnsurePlayerFocus(cUIA)
-        ;MsgBox("Sending next song command (Shift+N)", "Next Song", 0)
+        ; Method 1: Try to find and click Next button directly
+        try {
+            nextButtons := cUIA.FindElements({Name: "Next", Type: "Button"})
+            if (nextButtons.Length > 0) {
+                nextButtons[nextButtons.Length].Click()  ; Use last Next button (likely main player)
+                Echo("Next song (button click)")
+                return
+            }
+        } catch {
+            Echo("Next button not found, trying keyboard fallback")
+        }
+        
+        ; Method 2: Keyboard fallback with aggressive focus clearing
+        AggressiveFocusClear(cUIA)
         cUIA.Send("+n")  ; Shift+N
-        Echo("Next song command sent")
+        Echo("Next song (keyboard)")
+        
     } catch Error as e {
         Echo("Error playing next song: " . e.message)
         throw Error("Failed to play next song")
@@ -741,10 +768,25 @@ PreviousSong() {
     }
     
     try {
-        EnsurePlayerFocus(cUIA)
-        ;MsgBox("Sending previous song command (Shift+P)", "Previous Song", 0)
+        ; Method 1: Try to find and click Previous button directly
+        try {
+            prevButtons := cUIA.FindElements({Name: "Previous", Type: "Button"})
+            if (prevButtons.Length > 0) {
+                prevButtons[prevButtons.Length].Click()  ; Use last Previous button (likely main player)
+                Echo("Previous song (button click)")
+                return
+            }
+        } catch {
+            Echo("Previous button not found, trying keyboard fallback")
+        }
+        
+        ; Method 2: Keyboard fallback with aggressive focus clearing
+        AggressiveFocusClear(cUIA)
         cUIA.Send("+p")  ; Shift+P
-        Echo("Previous song command sent")
+        Sleep(100)        
+        cUIA.Send("+p")  ; Shift+P (double-tap for reliability)
+        Echo("Previous song (keyboard)")
+        
     } catch Error as e {
         Echo("Error playing previous song: " . e.message)
         throw Error("Failed to play previous song")
@@ -759,13 +801,11 @@ ForwardSeconds(seconds) {
     }
     
     try {
-        EnsurePlayerFocus(cUIA)
+        AggressiveFocusClear(cUIA)
         
         ; Calculate 10s and 1s increments
         tens := seconds // 10
         ones := seconds - (tens * 10)
-        
-        ;MsgBox("Forwarding " . seconds . " seconds (" . tens . "x10s + " . ones . "x1s)", "Forward", 0)
         
         ; Send 10-second forwards (l key)
         Loop tens {
@@ -794,13 +834,11 @@ BackSeconds(seconds) {
     }
     
     try {
-        EnsurePlayerFocus(cUIA)
+        AggressiveFocusClear(cUIA)
         
         ; Calculate 10s and 1s increments
         tens := seconds // 10
         ones := seconds - (tens * 10)
-        
-        ;MsgBox("Going back " . seconds . " seconds (" . tens . "x10s + " . ones . "x1s)", "Back", 0)
         
         ; Send 10-second backs (h key)
         Loop tens {
@@ -829,8 +867,7 @@ LikeSong() {
     }
     
     try {
-        EnsurePlayerFocus(cUIA)
-        ;MsgBox("Liking current song (+)", "Like Song", 0)
+        AggressiveFocusClear(cUIA)
         cUIA.Send("{+}")  ; Plus key
         Echo("Song liked")
     } catch Error as e {
@@ -847,8 +884,7 @@ DislikeSong() {
     }
     
     try {
-        EnsurePlayerFocus(cUIA)
-        ;MsgBox("Disliking current song (-)", "Dislike Song", 0)
+        AggressiveFocusClear(cUIA)
         cUIA.Send("{-}")  ; Minus key
         Echo("Song disliked")
     } catch Error as e {
@@ -865,8 +901,7 @@ ToggleRepeat() {
     }
     
     try {
-        EnsurePlayerFocus(cUIA)
-        ;MsgBox("Toggling repeat mode (R)", "Toggle Repeat", 0)
+        AggressiveFocusClear(cUIA)
         cUIA.Send("r")  ; R key
         Echo("Repeat mode toggled")
     } catch Error as e {
