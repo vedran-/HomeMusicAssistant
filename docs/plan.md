@@ -54,6 +54,7 @@ HomeAssistant/
 │   │   └── logger.py           # Logging setup
 │   ├── test_transcription_llm.py   # Comprehensive testing (Phase 2)
 │   ├── test_audio_capture.py       # Real audio testing (Phase 2)
+│   ├── test_tool_execution.py      # Tool execution testing (Phase 3)
 │   └── main.py                 # Application entry point & orchestrator
 ├── tools/ # Top-level tools directory, e.g., for documentation
 │   └── music_controller.md     # Documentation for existing tool
@@ -144,29 +145,41 @@ HomeAssistant/
 
 **Phase 2 Results**: All core intelligence components working excellently. System ready for tool execution implementation.
 
-### Phase 3: Tool Creation & Execution 🚧 CURRENT PHASE
+### Phase 3: Tool Creation & Execution ✅ COMPLETE (2025-05-24)
 **Objective**: Integrate the existing music tool and create the system control tool, enabling the LLM to execute them.
 
-**Tasks**:
-- [ ] **Tool Registry & Execution (`src/tools/registry.py`)**:
-    - [ ] Create `src/tools/__init__.py`.
-    - [ ] Implement a function to parse LLM output (expected JSON for tool calls).
-    - [ ] Implement a mechanism to call AutoHotkey scripts:
-        - [ ] Use `subprocess` module to run `AutoHotkey.exe script.ahk command param1 param2`.
-        - [ ] Capture stdout/stderr from AHK scripts for feedback/logging.
-    - [ ] Register the `music_controller.ahk` tool:
-        - [ ] Map LLM tool names (e.g., "playMusic", "setVolume") to `music_controller.ahk` commands based on `tools/music_controller.md`.
-- [ ] **System Control Tool (`src/tools/system_control.ahk`)**:
-    - [ ] Create `system_control.ahk` with functions for:
-        - [ ] Putting the system to sleep (`Sleep` command or `DllCall("PowrProf.dll", "SetSuspendState", "int", 0, "int", 0, "int", 0)`).
-        - [ ] *Self-correction: Volume control is already in `music_controller.ahk` which handles system volume, so no need to duplicate here unless for different types of volume control.*
-    - [ ] Ensure it accepts command-line arguments similar to `music_controller.ahk`.
-    - [ ] Register this tool in `src/tools/registry.py` and update `src/llm/prompts.py`.
-- [ ] **Main Orchestration (Full) (`src/main.py`)**:
-    - [ ] Integrate tool execution: LLM Response -> Tool Parser -> AHK Caller.
-    - [ ] Provide feedback to the user (e.g., "Playing music", "Going to sleep") using `app_logger` or TTS in future.
+**Status**: ✅ **ALL OBJECTIVES MET** - Complete tool execution pipeline working with music and volume controls.
 
-### Phase 4: MVP Testing & Refinement
+**Tasks**:
+- [X] **Tool Registry & Execution (`src/tools/registry.py`)**:
+    - [X] Create `src/tools/__init__.py`.
+    - [X] Implement a function to parse LLM output (expected JSON for tool calls).
+    - [X] Implement a mechanism to call AutoHotkey scripts:
+        - [X] Use `subprocess` module to run `AutoHotkey.exe script.ahk command param1 param2`.
+        - [X] Capture stdout/stderr from AHK scripts for feedback/logging.
+    - [X] Register the `music_controller.ahk` tool:
+        - [X] Map LLM tool names (e.g., "playMusic", "setVolume") to `music_controller.ahk` commands based on `tools/music_controller.md`.
+    - [X] **TESTED**: All volume and music controls working perfectly
+- [X] **System Control Tool (`src/tools/system_control.ahk`)**:
+    - [X] Create `system_control.ahk` with functions for:
+        - [X] Putting the system to sleep (`Sleep` command or `DllCall("PowrProf.dll", "SetSuspendState", "int", 0, "int", 0, "int", 0)`).
+        - [X] Shutdown functionality (for completeness, not tested for safety)
+    - [X] Ensure it accepts command-line arguments similar to `music_controller.ahk`.
+    - [X] Register this tool in `src/tools/registry.py` and update `src/llm/prompts.py`.
+    - [X] **TESTED**: Help command working, actual sleep/shutdown commands not tested for safety
+- [X] **Main Orchestration (Full) (`src/main.py`)**:
+    - [X] Integrate tool execution: LLM Response -> Tool Parser -> AHK Caller.
+    - [X] Provide feedback to the user (e.g., "Playing music", "Going to sleep") using `app_logger`.
+    - [X] **TESTED**: Full integration working with comprehensive logging and feedback
+- [X] **Testing Infrastructure (`src/test_tool_execution.py`)**:
+    - [X] Create comprehensive test script for end-to-end tool execution testing
+    - [X] Test all safe commands (volume, music controls)
+    - [X] Verify LLM → Tool Registry → AutoHotkey → Feedback pipeline
+    - [X] Document all test results and safety measures
+
+**Phase 3 Results**: Complete voice-to-action pipeline working. Users can now speak commands that are executed as AutoHotkey scripts with full feedback.
+
+### Phase 4: MVP Testing & Refinement ⏳ PENDING
 **Objective**: Ensure all components work together reliably for the MVP scope.
 
 **Tasks**:
@@ -174,7 +187,7 @@ HomeAssistant/
     - [ ] Test wake word detection with different microphone settings.
     - [ ] Test transcription accuracy with various phrases.
     - [ ] Test music control commands (play, toggle, volume up/down, mute/unmute via `music_controller.ahk`).
-    - [ ] Test system sleep command via `system_control.ahk`.
+    - [ ] Test system sleep command via `system_control.ahk` (with user consent).
 - [ ] **Error Handling & Robustness**:
     - [ ] Review error handling in each module (audio, transcription, LLM, tool execution).
     - [ ] Ensure graceful recovery or clear error messages for common issues (API errors, AHK script failures, mic issues).
