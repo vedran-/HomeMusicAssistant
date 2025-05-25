@@ -26,6 +26,20 @@ try {
             SleepComputer()
         case "shutdown":
             ShutdownComputer()
+        case "mute":
+            SoundSetMute(true)
+            Echo("System muted")
+        case "unmute":
+            SoundSetMute(false)
+            Echo("System unmuted")
+        case "volume-up":
+            amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+            AdjustVolume(amount)
+        case "volume-down":
+            amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+            AdjustVolume(-amount)
+        case "get-volume":
+            GetVolume()
         case "help":
             ShowHelp()
         default:
@@ -78,9 +92,63 @@ ShutdownComputer() {
     }
 }
 
+; Get current system volume and print to stdout
+GetVolume() {
+    currentVolume := SoundGetVolume()
+    volumeValue := Round(currentVolume)
+    
+    ; Use cmd echo for simple, reliable output
+    RunWait('cmd /c echo ' . volumeValue, , "")
+}
+
+; Adjust system volume by relative percentage
+AdjustVolume(percentage) {
+    try {
+        currentVolume := SoundGetVolume()
+        
+        ; Use minimum 1% for calculation base if current volume is lower
+        calculationBase := Max(currentVolume, 1)
+        
+        ; Calculate the change amount based on percentage of calculation base
+        changeAmount := calculationBase * (percentage / 100)
+        
+        ; Apply change to actual current volume
+        newVolume := currentVolume + changeAmount
+        
+        ; Clamp between 1 and 100 (1% absolute minimum)
+        if (newVolume > 100) {
+            newVolume := 100
+        } else if (newVolume < 1) {
+            newVolume := 1
+        }
+        
+        SoundSetVolume(newVolume)
+        
+        ; Output new volume to stdout for automation systems
+        RunWait('cmd /c echo ' . Round(newVolume), , "")
+        
+        ; Also echo human-readable message
+        Echo("Volume: " . Round(newVolume) . "% (changed by " . Round(changeAmount, 1) . "%)")
+        
+    } catch Error as e {
+        throw Error("Failed to adjust volume: " . e.message)
+    }
+}
+
+; Echo message to stdout
+Echo(message) {
+    try {
+        ; Try direct FileAppend to stdout
+        FileAppend(message . "`n", "*")
+    } catch {
+        ; Use cmd to echo the message directly to console
+        RunWait('cmd /c echo ' . message, , "")
+    }
+}
+
 ; Function to show help information
 ShowHelp() {
-    help_text := "System Control Script v1.0`nUsage: system_control.ahk <command>`n`nCommands:`n  sleep       Put the computer to sleep`n  shutdown    Shutdown the computer`n  help        Show this help information`n"
+    help_text := "System Control Script v1.0`nUsage: system_control.ahk <command>`n`nCommands:`n  sleep         Put the computer to sleep`n  shutdown      Shutdown the computer`n  mute          Mute system audio`n  unmute        Unmute system audio`n  get-volume    Get current system volume percentage`n  volume-up     Increase volume by percentage (default: 10%)`n  volume-down   Decrease volume by percentage (default: 10%)`n  help          Show this help information`n"
     FileAppend(help_text . "`n", "*")
 }
 
@@ -89,4 +157,4 @@ OnExit(CleanExit)
 
 CleanExit(*) {
     ; Cleanup function called when script exits
-} 
+}
