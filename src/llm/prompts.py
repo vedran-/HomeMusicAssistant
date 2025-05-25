@@ -15,16 +15,22 @@ IMPORTANT: You should ONLY respond by calling a tool. DO NOT respond with genera
 If you cannot determine which tool to call, or if the user's request doesn't match any available tool, 
 call the 'unknown_request' tool with a brief explanation.
 
-CRITICAL RULE FOR MUSIC: Whenever the user says "play" followed by ANYTHING, always use the play_music tool with action="play" and search_term set to whatever they want to play. Do NOT use unknown_request for play commands - the music system can search for anything.
+CRITICAL RULE FOR MUSIC: 
+Whenever the user says "play" followed by a search query, always use the play_music tool with action="play" and the search_term.
+If the user explicitly mentions "radio" (e.g., "play Pink Floyd radio"), set play_type="radio".
+Otherwise, for general play requests (e.g., "play Pink Floyd"), use play_type="default" or omit it.
+Do NOT use unknown_request for play commands - the music system can search for anything.
 
 Examples:
-- If user says "play some music" → call play_music with action="play"
-- If user says "play Boards of Canada" → call play_music with action="play", search_term="Boards of Canada"
-- If user says "play Magazines" → call play_music with action="play", search_term="Magazines"
-- If user says "play rock music" → call play_music with action="play", search_term="rock music"
-- If user says "play that song from the movie" → call play_music with action="play", search_term="that song from the movie"
-- If user says "play anything" → call play_music with action="play", search_term="anything"
-- If user says "play The Beatles" → call play_music with action="play", search_term="The Beatles"
+- If user says "play some music" → call play_music with action="play" (play_type can be omitted or "default")
+- If user says "play Boards of Canada" → call play_music with action="play", search_term="Boards of Canada" (play_type can be omitted or "default")
+- If user says "play Boards of Canada radio" → call play_music with action="play", search_term="Boards of Canada", play_type="radio"
+- If user says "start radio for The Cure" → call play_music with action="play", search_term="The Cure", play_type="radio"
+- If user says "play Magazines" → call play_music with action="play", search_term="Magazines", play_type="default"
+- If user says "play rock music radio" → call play_music with action="play", search_term="rock music", play_type="radio"
+- If user says "play that song from the movie" → call play_music with action="play", search_term="that song from the movie", play_type="default"
+- If user says "play anything radio" → call play_music with action="play", search_term="anything", play_type="radio"
+- If user says "play The Beatles" → call play_music with action="play", search_term="The Beatles" (play_type can be omitted or "default")
 - If user says "next song" → call play_music with action="next"
 - If user says "skip next three songs" → call play_music with action="next", count=3
 - If user says "previous song" → call play_music with action="previous" 
@@ -51,22 +57,28 @@ def get_available_tools() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "play_music",
-                "description": "Play ANY music or audio content based on user request. This tool accepts ANY search term - artist names, song titles, genres, albums, movie soundtracks, band names, random words, or any music-related query. The music system will search for whatever is provided. ALWAYS use this tool when user says 'play' followed by anything.",
+                "description": "Play music or start a radio based on user request. Accepts ANY search term. Use 'play_type' to specify if a radio should be started. ALWAYS use this tool when user says 'play' followed by a search query.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
                             "enum": ["play", "pause", "toggle", "next", "previous"],
-                            "description": "The action to perform on music playback. Use 'play' for any music request."
+                            "description": "The action to perform. For playing content or starting a radio with a search term, always use 'play'."
                         },
                         "search_term": {
                             "type": "string",
-                            "description": "What to play - can be ANYTHING: artist name, song title, genre, album, band name, random word, or any search term. The music system will search for whatever is provided."
+                            "description": "What to play or base the radio on - can be ANYTHING: artist name, song title, genre, album, etc."
+                        },
+                        "play_type": {
+                            "type": "string",
+                            "enum": ["default", "radio"],
+                            "description": "Specifies the playback mode. Use 'radio' if the user explicitly asks for a radio (e.g., 'play X radio'). Otherwise, use 'default' or omit for standard playback (usually shuffle/play).",
+                            "default": "default"
                         },
                         "count": {
                             "type": "integer",
-                            "description": "Number of songs to skip (only used with next/previous actions). Default: 1. Note: For previous, going back N songs requires N+1 button presses due to rewind behavior.",
+                            "description": "Number of songs to skip (only for next/previous actions). Default: 1.",
                             "minimum": 1,
                             "maximum": 10
                         }

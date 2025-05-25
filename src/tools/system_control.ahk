@@ -26,6 +26,8 @@ try {
             SleepComputer()
         case "shutdown":
             ShutdownComputer()
+        case "restart":
+            RestartComputer()
         case "mute":
             SoundSetMute(true)
             Echo("System muted")
@@ -38,6 +40,14 @@ try {
         case "volume-down":
             amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
             AdjustVolume(-amount)
+        case "set-volume":
+            if (A_Args.Length >= 2) {
+                percentage := Integer(A_Args[2])
+                SetAbsoluteVolume(percentage)
+            } else {
+                FileAppend("Error: set-volume requires a percentage value`n", "*")
+                ExitApp(1)
+            }
         case "get-volume":
             GetVolume()
         case "help":
@@ -92,6 +102,23 @@ ShutdownComputer() {
     }
 }
 
+; Function to restart the computer
+RestartComputer() {
+    try {
+        FileAppend("Restarting computer...`n", "*")
+        
+        ; Use Windows restart command with 5 second delay
+        Run('shutdown.exe /r /t 5 /c "Restart initiated by voice control"', , "Hide")
+        
+        FileAppend("Restart command executed (5 second delay)`n", "*")
+        ExitApp(0)
+        
+    } catch Error as e {
+        FileAppend("Failed to restart computer: " . e.message . "`n", "*")
+        ExitApp(1)
+    }
+}
+
 ; Get current system volume and print to stdout
 GetVolume() {
     currentVolume := SoundGetVolume()
@@ -135,6 +162,25 @@ AdjustVolume(percentage) {
     }
 }
 
+; Set system volume to absolute percentage
+SetAbsoluteVolume(percentage) {
+    try {
+        ; Validate percentage range (allow 0 for complete silence)
+        if (percentage < 0 || percentage > 100) {
+            throw Error("Volume percentage must be between 0 and 100")
+        }
+        
+        SoundSetVolume(percentage)
+        
+        ; Output confirmation
+        RunWait('cmd /c echo ' . percentage, , "")
+        Echo("Volume set to: " . percentage . "%")
+        
+    } catch Error as e {
+        throw Error("Failed to set volume: " . e.message)
+    }
+}
+
 ; Echo message to stdout
 Echo(message) {
     try {
@@ -148,7 +194,7 @@ Echo(message) {
 
 ; Function to show help information
 ShowHelp() {
-    help_text := "System Control Script v1.0`nUsage: system_control.ahk <command>`n`nCommands:`n  sleep         Put the computer to sleep`n  shutdown      Shutdown the computer`n  mute          Mute system audio`n  unmute        Unmute system audio`n  get-volume    Get current system volume percentage`n  volume-up     Increase volume by percentage (default: 10%)`n  volume-down   Decrease volume by percentage (default: 10%)`n  help          Show this help information`n"
+    help_text := "System Control Script v1.0`nUsage: system_control.ahk <command>`n`nCommands:`n  sleep         Put the computer to sleep`n  shutdown      Shutdown the computer`n  restart       Restart the computer`n  mute          Mute system audio`n  unmute        Unmute system audio`n  get-volume    Get current system volume percentage`n  volume-up     Increase volume by percentage (default: 10%)`n  volume-down   Decrease volume by percentage (default: 10%)`n  set-volume    Set absolute volume percentage (0-100)`n  help          Show this help information`n"
     FileAppend(help_text . "`n", "*")
 }
 

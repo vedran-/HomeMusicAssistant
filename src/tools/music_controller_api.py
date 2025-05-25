@@ -14,14 +14,16 @@ import time
 import subprocess
 import os # Keep os for path manipulation if not already present for it
 from .utils import run_ahk_script
+from src.config.settings import AppSettings
 
 logger = logging.getLogger(__name__)
 
 class YouTubeMusicAPIController:
     """Controller for YouTube Music using the YouTube Music Server API."""
     
-    def __init__(self, host: str = "localhost", port: int = 26538):
+    def __init__(self, settings: AppSettings, host: str = "localhost", port: int = 26538):
         """Initialize the controller with the server host and port."""
+        self.settings = settings
         self.base_url = f"http://{host}:{port}/api/v1"
         logger.info(f"Initialized YouTube Music API controller with base URL: {self.base_url}")
     
@@ -669,8 +671,8 @@ class YouTubeMusicAPIController:
 
     def play_music_ahk(self, search_term: str) -> Dict[str, Any]:
         """
-        Plays music using an AutoHotkey script to control the YouTube Music desktop app.
-        Searches for the term and then attempts to play or start a radio.
+        Plays music using an AutoHotkey script (command: "play").
+        Searches for the term and then attempts to shuffle/play.
 
         Args:
             search_term: The song, artist, or album to search for.
@@ -678,39 +680,35 @@ class YouTubeMusicAPIController:
         Returns:
             A dictionary indicating success or failure.
         """
-        logger.info(f"Attempting to play/radio music via AHK for: {search_term}")
+        logger.info(f"Attempting to 'play' music via AHK for: {search_term}")
 
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        ahk_script_path = os.path.join(current_dir, "youtube_music_play.ahk")
+        ahk_scripts_dir = self.settings.paths.autohotkey_scripts_dir
+        ahk_exe_path = self.settings.paths.autohotkey_exe
+        ahk_script_path = os.path.join(ahk_scripts_dir, "youtube_music_play.ahk")
 
-        # Call the utility function
-        # The default autohotkey_exe_path="AutoHotkey.exe" and timeout=30 from utils.run_ahk_script are used.
-        # cwd will also default to the script's parent directory.
         result = run_ahk_script(
             script_path=ahk_script_path,
-            args=[search_term],
-            logger=logger # Pass the logger from this class
+            args=["play", search_term],
+            autohotkey_exe_path=ahk_exe_path,
+            logger=logger
         )
 
-        # Adapt the result from run_ahk_script to the expected format of play_music_ahk
+        # Adapt the result from run_ahk_script
         if result["success"]:
-            # Original method returned stdout in a 'stdout' key on success.
             return {
                 "success": True,
                 "stdout": result["stdout"],
                 "feedback": result["feedback"]
             }
         else:
-            # Original method returned a more detailed error structure.
-            # We'll combine 'error_message' (high-level) and 'stderr' (script specific).
             error_message_parts = []
             if result.get("error_message"):
                 error_message_parts.append(result["error_message"])
             if result["stderr"]:
                 error_message_parts.append(f"Script stderr: {result['stderr']}")
-            if result["stdout"]: # Include stdout in error if script failed, as it might contain AHK error details
+            if result["stdout"]:
                  error_message_parts.append(f"Script stdout: {result['stdout']}")
-            
+        
             combined_error_message = ". ".join(filter(None, error_message_parts))
             if not combined_error_message:
                 combined_error_message = f"AHK script execution failed with exit code {result.get('exit_code', 'N/A')}."
@@ -726,8 +724,8 @@ class YouTubeMusicAPIController:
 
     def start_radio_ahk(self, search_term: str) -> Dict[str, Any]:
         """
-        Starts a radio based on a search term using an AutoHotkey script
-        to control the YouTube Music desktop app.
+        Starts a radio using an AutoHotkey script (command: "radio").
+        Searches for the term and then attempts to start a radio.
 
         Args:
             search_term: The song, artist, or album to base the radio on.
@@ -735,31 +733,70 @@ class YouTubeMusicAPIController:
         Returns:
             A dictionary indicating success or failure.
         """
-        logger.info(f"Attempting to start radio via AHK for: {search_term}")
-        # This method calls play_music_ahk as the underlying AHK script ('youtube_music_play.ahk')
-        # already implements the logic to search and then attempt to start a radio,
-        # shuffle, or play based on UI elements found.
-        # If more distinct 'start_radio' behavior is required independent of 'play_music',
-        # the AHK script would need to be modified (e.g., to accept an action parameter)
-        # or a separate, specialized AHK script would be used.
-        return self.play_music_ahk(search_term)
+        logger.info(f"Attempting to 'start radio' via AHK for: {search_term}")
+
+        ahk_scripts_dir = self.settings.paths.autohotkey_scripts_dir
+        ahk_exe_path = self.settings.paths.autohotkey_exe
+        ahk_script_path = os.path.join(ahk_scripts_dir, "youtube_music_play.ahk")
+
+        result = run_ahk_script(
+            script_path=ahk_script_path,
+            args=["radio", search_term],
+            autohotkey_exe_path=ahk_exe_path,
+            logger=logger
+        )
+
+        # Adapt the result from run_ahk_script (same logic as play_music_ahk)
+        if result["success"]:
+            return {
+                "success": True,
+                "stdout": result["stdout"],
+                "feedback": result["feedback"]
+            }
+        else:
+            error_message_parts = []
+            if result.get("error_message"):
+                error_message_parts.append(result["error_message"])
+            if result["stderr"]:
+                error_message_parts.append(f"Script stderr: {result['stderr']}")
+            if result["stdout"]:
+                 error_message_parts.append(f"Script stdout: {result['stdout']}")
+        
+            combined_error_message = ". ".join(filter(None, error_message_parts))
+            if not combined_error_message:
+                combined_error_message = f"AHK script execution failed with exit code {result.get('exit_code', 'N/A')}."
+
+            return {
+                "success": False,
+                "error": combined_error_message,
+                "returncode": result.get("exit_code"),
+                "stdout": result["stdout"],
+                "stderr": result["stderr"],
+                "feedback": result["feedback"]
+            }
 
 if __name__ == "__main__":
     # Simple test if this script is run directly
     import sys
+    from src.config.settings import load_settings # Added import
     
     # Set up logging
     logging.basicConfig(level=logging.INFO)
     
-    # Create controller
-    controller = YouTubeMusicAPIController()
-    
+    # Load settings and create controller
+    try:
+        settings = load_settings()
+        controller = YouTubeMusicAPIController(settings=settings) # Pass settings
+    except Exception as e:
+        logger.error(f"Failed to initialize controller for testing: {e}")
+        sys.exit(1)
+        
     # Parse command line arguments
     if len(sys.argv) < 2:
         print("Usage: python -m src.tools.music_controller_api <command> [args]")
         print("Commands:")
-        print("  play [search_term]         - Search and play the first result (uses play_music logic)")
-        print("  play_music [search_term]   - Search and play the first result")
+        print("  play [search_term]         - Search and play (shuffle/default) the first result") # Updated description
+        # print("  play_music [search_term]   - Search and play the first result") # play_music is now the default for "play"
         print("  radio [search_term]        - Start a radio based on a song/artist")
         print("  pause                      - Pause playback")
         print("  toggle                     - Toggle play/pause")
@@ -780,12 +817,14 @@ if __name__ == "__main__":
     command = sys.argv[1].lower()
     
     # Execute command
-    if (command == "play" or command == "play_music") and len(sys.argv) > 2:
+    # The CLI "play" command will now map to play_music_ahk (which sends "play" to AHK)
+    # The CLI "radio" command will map to start_radio_ahk (which sends "radio" to AHK)
+    if command == "play" and len(sys.argv) > 2: # Simplified condition
         search_term = sys.argv[2]
-        result = controller.play_music_ahk(search_term)
+        result = controller.play_music_ahk(search_term) # play_music_ahk now sends "play" command
     elif command == "radio" and len(sys.argv) > 2:
         search_term = sys.argv[2]
-        result = controller.start_radio_ahk(search_term)
+        result = controller.start_radio_ahk(search_term) # start_radio_ahk sends "radio" command
     elif command == "play": # This 'play' is for resuming playback if no search term is given
         result = controller.play()
     elif command == "pause":

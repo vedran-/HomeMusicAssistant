@@ -31,6 +31,7 @@ class ToolRegistry:
         
         # Initialize YouTube Music API controller
         self.music_api = YouTubeMusicAPIController(
+            settings=settings, 
             host=settings.youtube_music_api.host,
             port=settings.youtube_music_api.port
         )
@@ -93,39 +94,43 @@ class ToolRegistry:
             }
 
     def _execute_play_music(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute music playback commands using YouTube Music API."""
+        """Execute music playback commands, now primarily using AHK for play/radio actions."""
         action = parameters.get("action", "play")
         search_term = parameters.get("search_term")
+        play_type = parameters.get("play_type", "default") 
         count = parameters.get("count", 1)
         
-        app_logger.info(f"Music API action: {action}, search_term: {search_term}, count: {count}")
+        app_logger.info(f"Music API action: {action}, search_term: '{search_term}', play_type: '{play_type}', count: {count}")
         
         try:
-            # Map LLM actions to YouTube Music API methods
+            result = None
+            feedback = ""
+
             if action == "play" and search_term:
-                # Check if we should start a radio instead of just playing a single song
-                if parameters.get("radio", False):
-                    result = self.music_api.start_radio(search_term)
-                    feedback = f"Starting radio based on: {search_term}"
-                else:
-                    result = self.music_api.play_music(search_term)
-                    feedback = f"Playing: {search_term}"
+                if play_type == "radio":
+                    app_logger.info(f"Calling start_radio_ahk for: {search_term}")
+                    result = self.music_api.start_radio_ahk(search_term)
+                    feedback = f"Attempting to start radio for: {search_term}"
+                else: 
+                    app_logger.info(f"Calling play_music_ahk for: {search_term}")
+                    result = self.music_api.play_music_ahk(search_term)
+                    feedback = f"Attempting to play: {search_term}"
             
-            elif action == "play":
-                result = self.music_api.play()
-                feedback = "Playing music"
+            elif action == "play": 
+                result = self.music_api.play() 
+                feedback = "Resuming music playback"
             
             elif action == "pause" or action == "toggle":
-                result = self.music_api.toggle_playback()
+                result = self.music_api.toggle_playback() 
                 feedback = "Music playback toggled"
             
             elif action == "next":
-                result = self.music_api.next(count=count)
+                result = self.music_api.next(count=count) 
                 song_word = "song" if count == 1 else "songs"
                 feedback = f"Skipped {count} {song_word} forward"
             
             elif action == "previous":
-                result = self.music_api.previous(count=count)
+                result = self.music_api.previous(count=count) 
                 song_word = "song" if count == 1 else "songs"
                 feedback = f"Skipped {count} {song_word} backward"
             
@@ -136,28 +141,28 @@ class ToolRegistry:
                     "feedback": f"I don't know how to {action} music"
                 }
             
-            # Process API result
-            if not result.get("success", True):
-                app_logger.error(f"Music API error: {result.get('error', 'Unknown error')}")
+            if not result or not result.get("success", False): 
+                error_detail = result.get("error", result.get("stderr", "Unknown error")) if result else "AHK script did not return a result."
+                app_logger.error(f"Music action '{action}' failed: {error_detail}")
                 return {
                     "success": False,
-                    "error": result.get("error", "Unknown error"),
-                    "feedback": f"Failed to {action} music: {result.get('error', 'Unknown error')}"
+                    "error": error_detail,
+                    "feedback": f"Failed to {action} music: {error_detail}"
                 }
             
             return {
                 "success": True,
-                "output": json.dumps(result) if isinstance(result, dict) else str(result),
+                "output": result.get("stdout", json.dumps(result) if isinstance(result, dict) else str(result)),
                 "feedback": feedback
             }
             
         except Exception as e:
-            app_logger.error(f"Music API exception: {str(e)}")
+            app_logger.error(f"Music API/AHK exception during '{action}': {str(e)}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e),
-                "feedback": f"Error performing {action} music: {str(e)}"
-            }
+                "feedback": f"Error performing '{action}' music: {str(e)}"
+            }    
 
     def _execute_music_control(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute advanced music control commands using YouTube Music API."""
