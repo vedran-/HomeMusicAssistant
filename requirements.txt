@@ -5,4 +5,4 @@ pydantic
 python-dotenv
 loguru
 groq
-pygame 
+playsound3 

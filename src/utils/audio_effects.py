@@ -17,32 +17,21 @@ def play_sound_effect_async(sound_file_path: str, volume: float = 0.7) -> None:
     
     Args:
         sound_file_path: Path to the sound file to play
-        volume: Volume level (0.0 to 1.0)
+        volume: Volume level (0.0 to 1.0) - Note: playsound3 doesn't support volume control
     """
     def _play_sound():
         try:
-            import pygame
-            
-            # Initialize pygame mixer if not already initialized
-            if not pygame.mixer.get_init():
-                pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
-                
-            # Load and play the sound
-            if os.path.exists(sound_file_path):
-                sound = pygame.mixer.Sound(sound_file_path)
-                sound.set_volume(volume)
-                sound.play()
-                
-                # Wait for the sound to finish playing
-                while pygame.mixer.get_busy():
-                    pygame.time.wait(100)
-                    
-                app_logger.debug(f"Sound effect played: {sound_file_path}")
-            else:
+            if not os.path.exists(sound_file_path):
                 app_logger.warning(f"Sound effect file not found: {sound_file_path}")
+                return
+                
+            # Use playsound3 for cross-platform audio playback
+            from playsound3 import playsound
+            playsound(sound_file_path, block=False)
+            app_logger.debug(f"Sound effect played: {sound_file_path}")
                 
         except ImportError:
-            app_logger.warning("pygame not available - sound effects disabled")
+            app_logger.warning("playsound3 not available - sound effects disabled")
         except Exception as e:
             app_logger.error(f"Error playing sound effect: {e}")
     
