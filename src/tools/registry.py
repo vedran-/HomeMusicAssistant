@@ -259,6 +259,16 @@ class ToolRegistry:
                 command.append(str(amount))
             feedback = f"Volume decreased" + (f" by {amount}%" if amount else "")
             
+        elif action == "set":
+            if amount is None:
+                return {
+                    "success": False,
+                    "error": "Amount required for set volume action",
+                    "feedback": "Please specify a volume percentage to set"
+                }
+            command = ["set-volume", str(amount)]
+            feedback = f"Volume set to {amount}%"
+            
         elif action == "mute":
             command = ["mute"]
             feedback = "Volume muted"
@@ -293,7 +303,8 @@ class ToolRegistry:
         
         command_map = {
             "sleep": ["sleep"],
-            "shutdown": ["shutdown"]
+            "shutdown": ["shutdown"],
+            "restart": ["restart"]
         }
         
         if action not in command_map:
@@ -309,7 +320,8 @@ class ToolRegistry:
         if result["success"]:
             feedback_map = {
                 "sleep": "Putting the computer to sleep",
-                "shutdown": "Shutting down the computer"
+                "shutdown": "Shutting down the computer",
+                "restart": "Restarting the computer"
             }
             result["feedback"] = feedback_map.get(action, f"System {action} executed")
         

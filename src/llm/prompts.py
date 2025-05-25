@@ -39,7 +39,9 @@ Examples:
 - If user says "like this song" → call music_control with action="like"
 - If user says "turn on shuffle" → call music_control with action="shuffle"
 - If user says "turn up the volume" → call control_volume with action="up"
+- If user says "set volume to 50" → call control_volume with action="set", amount=50
 - If user says "put the computer to sleep" → call system_control with action="sleep"
+- If user says "restart the computer" → call system_control with action="restart"
 - If user says "what time is it" → call unknown_request with reason="No tool available for time queries"
 """
 
@@ -125,13 +127,13 @@ def get_available_tools() -> List[Dict[str, Any]]:
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["up", "down", "mute", "unmute"],
+                            "enum": ["up", "down", "set", "mute", "unmute"],
                             "description": "The volume action to perform"
                         },
                         "amount": {
                             "type": "integer",
-                            "description": "Amount to change volume (1-100, only used with up/down actions)",
-                            "minimum": 1,
+                            "description": "Amount to change volume (1-100 for up/down) or absolute volume level (0-100 for set)",
+                            "minimum": 0,
                             "maximum": 100
                         }
                     },
@@ -143,13 +145,13 @@ def get_available_tools() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "system_control",
-                "description": "Control system functions like sleep or shutdown",
+                "description": "Control system functions like sleep, shutdown, or restart",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["sleep", "shutdown"],
+                            "enum": ["sleep", "shutdown", "restart"],
                             "description": "The system action to perform"
                         }
                     },
