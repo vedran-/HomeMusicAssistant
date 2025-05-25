@@ -3,18 +3,21 @@ Tool Registry and Execution System
 
 This module handles:
 1. Parsing LLM tool call responses
-2. Mapping tool calls to AutoHotkey script commands
-3. Executing AutoHotkey scripts via subprocess
-4. Capturing and logging script output/errors
+2. Mapping tool calls to appropriate controllers (YouTube Music API or AutoHotkey)
+3. Executing controls and capturing results
+4. Logging output/errors
 """
 
 import subprocess
 import os
-from typing import Dict, Any, Optional, List, Tuple
+import json
+from typing import Dict, Any, Optional, List, Tuple, Union
 from pathlib import Path
 
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
+from src.tools.music_controller_api import YouTubeMusicAPIController
+from .utils import run_ahk_script
 
 class ToolExecutionError(Exception):
     """Custom exception for tool execution failures."""
@@ -26,7 +29,13 @@ class ToolRegistry:
         self.autohotkey_exe = settings.paths.autohotkey_exe
         self.scripts_dir = Path(settings.paths.autohotkey_scripts_dir)
         
-        # Validate AutoHotkey executable
+        # Initialize YouTube Music API controller
+        self.music_api = YouTubeMusicAPIController(
+            host=settings.youtube_music_api.host,
+            port=settings.youtube_music_api.port
+        )
+        
+        # Validate AutoHotkey executable (still needed for system controls)
         if not os.path.exists(self.autohotkey_exe):
             raise FileNotFoundError(f"AutoHotkey executable not found: {self.autohotkey_exe}")
         
@@ -34,7 +43,8 @@ class ToolRegistry:
         if not self.scripts_dir.exists():
             raise FileNotFoundError(f"AutoHotkey scripts directory not found: {self.scripts_dir}")
         
-        app_logger.info(f"Tool registry initialized with AutoHotkey: {self.autohotkey_exe}")
+        app_logger.info(f"Tool registry initialized with YouTube Music API at {settings.youtube_music_api.host}:{settings.youtube_music_api.port}")
+        app_logger.info(f"AutoHotkey: {self.autohotkey_exe}")
         app_logger.info(f"Scripts directory: {self.scripts_dir}")
 
     def execute_tool_call(self, tool_call: Dict[str, Any]) -> Dict[str, Any]:
@@ -83,130 +93,154 @@ class ToolRegistry:
             }
 
     def _execute_play_music(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute music playback commands."""
+        """Execute music playback commands using YouTube Music API."""
         action = parameters.get("action", "play")
         search_term = parameters.get("search_term")
-        count = parameters.get("count")
+        count = parameters.get("count", 1)
         
-        # Map LLM actions to music_controller.ahk commands
-        command_map = {
-            "play": ["play"],
-            "pause": ["toggle"],  # toggle is used for pause
-            "toggle": ["toggle"],
-            "next": ["next"],
-            "previous": ["previous"]
-        }
+        app_logger.info(f"Music API action: {action}, search_term: {search_term}, count: {count}")
         
-        if action not in command_map:
+        try:
+            # Map LLM actions to YouTube Music API methods
+            if action == "play" and search_term:
+                # Check if we should start a radio instead of just playing a single song
+                if parameters.get("radio", False):
+                    result = self.music_api.start_radio(search_term)
+                    feedback = f"Starting radio based on: {search_term}"
+                else:
+                    result = self.music_api.play_music(search_term)
+                    feedback = f"Playing: {search_term}"
+            
+            elif action == "play":
+                result = self.music_api.play()
+                feedback = "Playing music"
+            
+            elif action == "pause" or action == "toggle":
+                result = self.music_api.toggle_playback()
+                feedback = "Music playback toggled"
+            
+            elif action == "next":
+                result = self.music_api.next(count=count)
+                song_word = "song" if count == 1 else "songs"
+                feedback = f"Skipped {count} {song_word} forward"
+            
+            elif action == "previous":
+                result = self.music_api.previous(count=count)
+                song_word = "song" if count == 1 else "songs"
+                feedback = f"Skipped {count} {song_word} backward"
+            
+            else:
+                return {
+                    "success": False,
+                    "error": f"Unknown music action: {action}",
+                    "feedback": f"I don't know how to {action} music"
+                }
+            
+            # Process API result
+            if not result.get("success", True):
+                app_logger.error(f"Music API error: {result.get('error', 'Unknown error')}")
+                return {
+                    "success": False,
+                    "error": result.get("error", "Unknown error"),
+                    "feedback": f"Failed to {action} music: {result.get('error', 'Unknown error')}"
+                }
+            
+            return {
+                "success": True,
+                "output": json.dumps(result) if isinstance(result, dict) else str(result),
+                "feedback": feedback
+            }
+            
+        except Exception as e:
+            app_logger.error(f"Music API exception: {str(e)}")
             return {
                 "success": False,
-                "error": f"Unknown music action: {action}",
-                "feedback": f"I don't know how to {action} music"
+                "error": str(e),
+                "feedback": f"Error performing {action} music: {str(e)}"
             }
-        
-        script_path = self.scripts_dir / "music_controller.ahk"
-        command = command_map[action].copy()  # Make a copy to avoid modifying the original
-        
-        # Add search term for play action
-        if action == "play" and search_term:
-            command.append(search_term)
-            app_logger.info(f"Playing music: {search_term}")
-        
-        # Add count for next/previous actions
-        elif action in ["next", "previous"] and count:
-            command.append(str(count))
-            app_logger.info(f"Skipping {count} song(s) {action}")
-        
-        result = self._run_autohotkey_script(script_path, command)
-        
-        if result["success"]:
-            if action == "play" and search_term:
-                result["feedback"] = f"Playing: {search_term}"
-            elif action == "next" and count:
-                song_word = "song" if count == 1 else "songs"
-                result["feedback"] = f"Skipped {count} {song_word} forward"
-            elif action == "previous" and count:
-                song_word = "song" if count == 1 else "songs"
-                result["feedback"] = f"Skipped {count} {song_word} backward"
-            else:
-                feedback_map = {
-                    "play": "Playing music",
-                    "pause": "Music paused",
-                    "toggle": "Music toggled",
-                    "next": "Playing next track",
-                    "previous": "Playing previous track"
-                }
-                result["feedback"] = feedback_map.get(action, f"Music {action} executed")
-        
-        return result
 
     def _execute_music_control(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute advanced music control commands."""
+        """Execute advanced music control commands using YouTube Music API."""
         action = parameters.get("action")
         amount = parameters.get("amount")
         search_term = parameters.get("search_term")
         
-        script_path = self.scripts_dir / "music_controller.ahk"
+        app_logger.info(f"Advanced music control: {action}, amount: {amount}, search_term: {search_term}")
         
-        # Map LLM actions to music_controller.ahk commands
-        if action == "forward":
-            command = ["forward"]
-            if amount:
-                command.append(str(amount))
-            feedback = f"Forwarded {amount or 10} seconds"
-            
-        elif action in ["back", "rewind"]:
-            command = ["back"]
-            if amount:
-                command.append(str(amount))
-            feedback = f"Went back {amount or 10} seconds"
-            
-        elif action == "like":
-            command = ["like"]
-            feedback = "Song liked"
-            
-        elif action == "dislike":
-            command = ["dislike"]
-            feedback = "Song disliked"
-            
-        elif action == "shuffle":
-            command = ["toggle-shuffle"]
-            feedback = "Shuffle mode toggled"
-            
-        elif action == "repeat":
-            command = ["repeat"]
-            feedback = "Repeat mode toggled"
-            
-        elif action == "search":
-            if not search_term:
+        try:
+            # Map LLM actions to YouTube Music API methods
+            if action == "forward":
+                seconds = amount or 10
+                result = self.music_api.forward(seconds)
+                feedback = f"Forwarded {seconds} seconds"
+                
+            elif action in ["back", "rewind"]:
+                seconds = amount or 10
+                result = self.music_api.rewind(seconds)
+                feedback = f"Went back {seconds} seconds"
+                
+            elif action == "like":
+                result = self.music_api.like()
+                feedback = "Song liked"
+                
+            elif action == "dislike":
+                result = self.music_api.dislike()
+                feedback = "Song disliked"
+                
+            elif action == "shuffle":
+                result = self.music_api.toggle_shuffle()
+                feedback = "Shuffle mode toggled"
+                
+            elif action == "repeat":
+                result = self.music_api.toggle_repeat()
+                feedback = "Repeat mode toggled"
+                
+            elif action == "search":
+                if not search_term:
+                    return {
+                        "success": False,
+                        "error": "Search term required for search action",
+                        "feedback": "Please specify what to search for"
+                    }
+                result = self.music_api.search(search_term)
+                feedback = f"Searching for: {search_term}"
+                
+            else:
                 return {
                     "success": False,
-                    "error": "Search term required for search action",
-                    "feedback": "Please specify what to search for"
+                    "error": f"Unknown music control action: {action}",
+                    "feedback": f"I don't know how to {action} music"
                 }
-            command = ["search", search_term]
-            feedback = f"Searching for: {search_term}"
             
-        else:
+            # Process API result
+            if not result.get("success", True):
+                app_logger.error(f"Music API error: {result.get('error', 'Unknown error')}")
+                return {
+                    "success": False,
+                    "error": result.get("error", "Unknown error"),
+                    "feedback": f"Failed to {action}: {result.get('error', 'Unknown error')}"
+                }
+            
+            return {
+                "success": True,
+                "output": json.dumps(result) if isinstance(result, dict) else str(result),
+                "feedback": feedback
+            }
+            
+        except Exception as e:
+            app_logger.error(f"Music API exception: {str(e)}")
             return {
                 "success": False,
-                "error": f"Unknown music control action: {action}",
-                "feedback": f"I don't know how to {action} music"
+                "error": str(e),
+                "feedback": f"Error performing {action}: {str(e)}"
             }
-        
-        result = self._run_autohotkey_script(script_path, command)
-        
-        if result["success"]:
-            result["feedback"] = feedback
-        
-        return result
 
     def _execute_control_volume(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute volume control commands."""
+        """Execute volume control commands using AutoHotkey system_control.ahk."""
         action = parameters.get("action", "up")
         amount = parameters.get("amount")
         
-        script_path = self.scripts_dir / "music_controller.ahk"
+        script_path = self.scripts_dir / "system_control.ahk"
         
         if action == "up":
             command = ["volume-up"]
@@ -290,86 +324,46 @@ class ToolRegistry:
 
     def _run_autohotkey_script(self, script_path: Path, args: List[str]) -> Dict[str, Any]:
         """
-        Run an AutoHotkey script with the given arguments.
+        Run an AutoHotkey script using the utility function.
         
         Args:
-            script_path: Path to the .ahk script
-            args: List of arguments to pass to the script
+            script_path: Path to the .ahk script.
+            args: List of arguments to pass to the script.
             
         Returns:
-            Dict with success status, output, and error information
+            A dictionary with execution results, including success status, output, and feedback.
         """
-        if not script_path.exists():
-            error_msg = f"Script not found: {script_path}"
-            app_logger.error(error_msg)
-            return {
-                "success": False,
-                "error": error_msg,
-                "output": "",
-                "feedback": f"Script file not found: {script_path.name}"
-            }
+        # The new utility function returns a slightly different dict structure.
+        # We adapt it here to maintain compatibility with how _run_autohotkey_script was used previously,
+        # particularly the 'output' and 'error' keys, and the 'feedback' message construction.
         
-        # Build the command
-        cmd = [str(self.autohotkey_exe), str(script_path)] + args
+        result = run_ahk_script(
+            script_path=script_path,
+            args=args,
+            autohotkey_exe_path=self.autohotkey_exe, # Use configured AHK exe path
+            logger=app_logger # Pass the existing app_logger
+            # timeout and cwd will use the defaults in run_ahk_script (30s, script's parent dir)
+        )
         
-        app_logger.info(f"Executing: {' '.join(cmd)}")
+        # Adapt the result from run_ahk_script to the expected format of _run_autohotkey_script callers
+        # The main difference is that run_ahk_script uses 'stdout', 'stderr', and 'error_message'
+        # while the old _run_autohotkey_script used 'output' (for stdout) and 'error' (for stderr or high-level error).
+        # The 'feedback' is also slightly different.
         
-        try:
-            # Run the script with timeout
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,  # 30 second timeout
-                cwd=str(script_path.parent)  # Run from script directory
-            )
+        adapted_result = {
+            "success": result["success"],
+            "exit_code": result.get("exit_code"), # Might be None if script didn't run
+            "output": result["stdout"], # Map stdout to 'output'
+            "error": result["stderr"] or result.get("error_message", ""), # Combine stderr and high-level error_message
+            "feedback": result["feedback"] # Use feedback directly from utility
+        }
+        
+        # If the utility reported a high-level error_message (e.g. script not found, timeout),
+        # ensure this is prioritized in the 'error' field if stderr was empty.
+        if result.get("error_message") and not result["stderr"]:
+            adapted_result["error"] = result["error_message"]
             
-            # Log the results
-            app_logger.info(f"Script exit code: {result.returncode}")
-            if result.stdout:
-                app_logger.info(f"Script stdout: {result.stdout.strip()}")
-            if result.stderr:
-                app_logger.warning(f"Script stderr: {result.stderr.strip()}")
-            
-            success = result.returncode == 0
-            
-            return {
-                "success": success,
-                "exit_code": result.returncode,
-                "output": result.stdout.strip() if result.stdout else "",
-                "error": result.stderr.strip() if result.stderr else "",
-                "feedback": "Command executed successfully" if success else f"Command failed with exit code {result.returncode}"
-            }
-            
-        except subprocess.TimeoutExpired:
-            error_msg = f"Script execution timed out after 30 seconds"
-            app_logger.error(error_msg)
-            return {
-                "success": False,
-                "error": error_msg,
-                "output": "",
-                "feedback": "Command timed out"
-            }
-            
-        except FileNotFoundError:
-            error_msg = f"AutoHotkey executable not found: {self.autohotkey_exe}"
-            app_logger.error(error_msg)
-            return {
-                "success": False,
-                "error": error_msg,
-                "output": "",
-                "feedback": "AutoHotkey not found"
-            }
-            
-        except Exception as e:
-            error_msg = f"Unexpected error running script: {e}"
-            app_logger.error(error_msg, exc_info=True)
-            return {
-                "success": False,
-                "error": error_msg,
-                "output": "",
-                "feedback": f"Script execution failed: {str(e)}"
-            }
+        return adapted_result
 
     def test_autohotkey_connection(self) -> bool:
         """

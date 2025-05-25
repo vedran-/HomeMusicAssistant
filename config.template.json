@@ -5,6 +5,10 @@
     "model": "gpt-3.5-turbo",
     "api_key": "YOUR_LLM_API_KEY_IF_NEEDED"
   },
+  "youtube_music_api": {
+    "host": "localhost",
+    "port": 9863
+  },
   "transcription_settings": {
     "whisper_instructions": "You are transcribing voice commands for a home automation system. Focus on accuracy for commands like 'play music', 'volume up', 'mute', etc. Provide clear, concise transcription.",
     "language": null,
@@ -26,4 +30,4 @@
     "level": "INFO",
     "format": "{time} | {level} | {message}"
   }
-} 
+}

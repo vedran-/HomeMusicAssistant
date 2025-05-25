@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 
 load_dotenv() # Load .env file
 
+class YouTubeMusicAPISettings(BaseModel):
+    host: str = Field(default="localhost")
+    port: int = Field(default=9863) # Default port from template
+
 class LiteLLMSettings(BaseModel):
     provider: str = Field(default="openai")
     model: str = Field(default="gpt-3.5-turbo")
@@ -43,6 +47,7 @@ class AppSettings(BaseModel):
     audio_settings: AudioSettings = Field(default_factory=AudioSettings)
     paths: PathsSettings
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    youtube_music_api: YouTubeMusicAPISettings = Field(default_factory=YouTubeMusicAPISettings)
 
 def load_settings(config_path: str = "config.json") -> AppSettings:
     # Try to load GROQ_API_KEY from environment first
@@ -124,6 +129,8 @@ if __name__ == "__main__":
         print(f"LiteLLM Provider: {settings.litellm_settings.provider}")
         print(f"LiteLLM Model: {settings.litellm_settings.model}")
         print(f"LiteLLM API Key: {'*' * len(settings.litellm_settings.api_key) if settings.litellm_settings.api_key else 'Not set'}")
+        print(f"YouTube Music API Host: {settings.youtube_music_api.host}")
+        print(f"YouTube Music API Port: {settings.youtube_music_api.port}")
         print(f"AHK Path: {settings.paths.autohotkey_exe}")
         print(f"OpenWakeWord Models Path: {settings.paths.openwakeword_models_dir}")
         print(f"AutoHotkey Scripts Path: {settings.paths.autohotkey_scripts_dir}")
