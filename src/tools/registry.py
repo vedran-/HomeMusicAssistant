@@ -86,14 +86,15 @@ class ToolRegistry:
         """Execute music playback commands."""
         action = parameters.get("action", "play")
         search_term = parameters.get("search_term")
+        count = parameters.get("count")
         
         # Map LLM actions to music_controller.ahk commands
         command_map = {
             "play": ["play"],
             "pause": ["toggle"],  # toggle is used for pause
             "toggle": ["toggle"],
-            "next": ["next"],  # Will need to be implemented in AHK script
-            "previous": ["previous"]  # Will need to be implemented in AHK script
+            "next": ["next"],
+            "previous": ["previous"]
         }
         
         if action not in command_map:
@@ -111,11 +112,22 @@ class ToolRegistry:
             command.append(search_term)
             app_logger.info(f"Playing music: {search_term}")
         
+        # Add count for next/previous actions
+        elif action in ["next", "previous"] and count:
+            command.append(str(count))
+            app_logger.info(f"Skipping {count} song(s) {action}")
+        
         result = self._run_autohotkey_script(script_path, command)
         
         if result["success"]:
             if action == "play" and search_term:
                 result["feedback"] = f"Playing: {search_term}"
+            elif action == "next" and count:
+                song_word = "song" if count == 1 else "songs"
+                result["feedback"] = f"Skipped {count} {song_word} forward"
+            elif action == "previous" and count:
+                song_word = "song" if count == 1 else "songs"
+                result["feedback"] = f"Skipped {count} {song_word} backward"
             else:
                 feedback_map = {
                     "play": "Playing music",

@@ -25,7 +25,10 @@ Examples:
 - If user says "play that song from the movie" → call play_music with action="play", search_term="that song from the movie"
 - If user says "play anything" → call play_music with action="play", search_term="anything"
 - If user says "play The Beatles" → call play_music with action="play", search_term="The Beatles"
-- If user says "next song" → call music_control with action="next"
+- If user says "next song" → call play_music with action="next"
+- If user says "skip next three songs" → call play_music with action="next", count=3
+- If user says "previous song" → call play_music with action="previous" 
+- If user says "go back two songs" → call play_music with action="previous", count=2
 - If user says "go back 30 seconds" → call music_control with action="back", amount=30
 - If user says "like this song" → call music_control with action="like"
 - If user says "turn on shuffle" → call music_control with action="shuffle"
@@ -60,6 +63,12 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         "search_term": {
                             "type": "string",
                             "description": "What to play - can be ANYTHING: artist name, song title, genre, album, band name, random word, or any search term. The music system will search for whatever is provided."
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "Number of songs to skip (only used with next/previous actions). Default: 1. Note: For previous, going back N songs requires N+1 button presses due to rewind behavior.",
+                            "minimum": 1,
+                            "maximum": 10
                         }
                     },
                     "required": ["action"]

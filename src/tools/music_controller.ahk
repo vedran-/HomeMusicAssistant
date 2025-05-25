@@ -37,10 +37,12 @@ Main() {
                 ToggleShuffleMode()
             
             case "next":
-                NextSong()
+                count := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 1
+                NextSongs(count)
             
             case "previous", "prev":
-                PreviousSong()
+                count := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 1
+                PreviousSongs(count)
             
             case "forward":
                 seconds := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
@@ -579,9 +581,15 @@ MUSIC PLAYBACK COMMANDS:
   
   toggle               - Toggle play/pause current music (uses last Play/Pause button)
   
-  next                 - Play next song (Shift+N)
+  next [count]         - Play next song(s) (Shift+N)
+                        Default: 1 song
+                        Examples: next, next 3, next 5
   
-  previous, prev       - Play previous song (Shift+P)
+  previous [count]     - Play previous song(s) (Shift+P)
+  prev [count]         - Same as previous
+                        Default: 1 song
+                        Note: Going back N songs requires N+1 presses (1st rewinds current)
+                        Examples: previous, prev 2, previous 4
   
   forward [seconds]    - Forward by seconds (default: 10)
                         Uses 10s + 1s increments (e.g., 32s = 3x10s + 2x1s)
@@ -618,6 +626,8 @@ EXAMPLES:
   music_controller.ahk play jazz
   music_controller.ahk search ""nirvana unplugged""
   music_controller.ahk next
+  music_controller.ahk next 3
+  music_controller.ahk previous 2
   music_controller.ahk forward 32
   music_controller.ahk back 15
   music_controller.ahk like
@@ -729,68 +739,128 @@ AggressiveFocusClear(cUIA) {
     }
 }
 
-; Play next song
-NextSong() {
+; Play next song(s) - supports multiple song skipping
+NextSongs(count := 1) {
     cUIA := GetYouTubeMusicBrowser()
     if (!cUIA) {
         throw Error("YouTube Music not found. Use 'play' command first.")
     }
     
+    if (count < 1) {
+        count := 1
+    }
+    
     try {
-        ; Method 1: Try to find and click Next button directly
-        try {
-            nextButtons := cUIA.FindElements({Name: "Next", Type: "Button"})
-            if (nextButtons.Length > 0) {
-                nextButtons[nextButtons.Length].Click()  ; Use last Next button (likely main player)
-                Echo("Next song (button click)")
-                return
+        Echo("Skipping " . count . " song(s) forward...")
+        
+        ; For forward skipping, each press advances one song
+        Loop count {
+            ; Method 1: Try to find and click Next button directly
+            try {
+                nextButtons := cUIA.FindElements({Name: "Next", Type: "Button"})
+                if (nextButtons.Length > 0) {
+                    nextButtons[nextButtons.Length].Click()  ; Use last Next button (likely main player)
+                    Echo("Next song " . A_Index . "/" . count . " (button click)")
+                } else {
+                    throw Error("No Next button found")
+                }
+            } catch {
+                ; Method 2: Keyboard fallback with aggressive focus clearing
+                AggressiveFocusClear(cUIA)
+                cUIA.Send("+n")  ; Shift+N
+                Echo("Next song " . A_Index . "/" . count . " (keyboard)")
             }
-        } catch {
-            Echo("Next button not found, trying keyboard fallback")
+            
+            ; Small delay between songs to allow UI to update
+            if (A_Index < count) {
+                Sleep(300)
+            }
         }
         
-        ; Method 2: Keyboard fallback with aggressive focus clearing
-        AggressiveFocusClear(cUIA)
-        cUIA.Send("+n")  ; Shift+N
-        Echo("Next song (keyboard)")
+        if (count == 1) {
+            Echo("Skipped to next song")
+        } else {
+            Echo("Skipped " . count . " songs forward")
+        }
         
     } catch Error as e {
-        Echo("Error playing next song: " . e.message)
-        throw Error("Failed to play next song")
+        Echo("Error skipping next songs: " . e.message)
+        throw Error("Failed to skip next songs")
     }
 }
 
-; Play previous song
-PreviousSong() {
+; Legacy function for backward compatibility
+NextSong() {
+    NextSongs(1)
+}
+
+; Play previous song(s) - supports multiple song skipping with asymmetric behavior
+PreviousSongs(count := 1) {
     cUIA := GetYouTubeMusicBrowser()
     if (!cUIA) {
         throw Error("YouTube Music not found. Use 'play' command first.")
     }
     
+    if (count < 1) {
+        count := 1
+    }
+    
     try {
-        ; Method 1: Try to find and click Previous button directly
-        try {
-            prevButtons := cUIA.FindElements({Name: "Previous", Type: "Button"})
-            if (prevButtons.Length > 0) {
-                prevButtons[prevButtons.Length].Click()  ; Use last Previous button (likely main player)
-                Echo("Previous song (button click)")
-                return
+        Echo("Skipping " . count . " song(s) backward...")
+        
+        ; For backward skipping: 1st press rewinds current song to start, 
+        ; 2nd press goes to previous song, then each additional press goes back one more
+        ; So for N songs back, we need N+1 presses total
+        totalPresses := count + 1
+        
+        Loop totalPresses {
+            ; Method 1: Try to find and click Previous button directly  
+            try {
+                prevButtons := cUIA.FindElements({Name: "Previous", Type: "Button"})
+                if (prevButtons.Length > 0) {
+                    prevButtons[prevButtons.Length].Click()  ; Use last Previous button (likely main player)
+                    if (A_Index == 1) {
+                        Echo("Rewinding current song to start (press " . A_Index . "/" . totalPresses . ")")
+                    } else {
+                        songNumber := A_Index - 1
+                        Echo("Previous song " . songNumber . "/" . count . " (press " . A_Index . "/" . totalPresses . ", button click)")
+                    }
+                } else {
+                    throw Error("No Previous button found")
+                }
+            } catch {
+                ; Method 2: Keyboard fallback with aggressive focus clearing
+                AggressiveFocusClear(cUIA)
+                cUIA.Send("+p")  ; Shift+P
+                if (A_Index == 1) {
+                    Echo("Rewinding current song to start (press " . A_Index . "/" . totalPresses . ", keyboard)")
+                } else {
+                    songNumber := A_Index - 1
+                    Echo("Previous song " . songNumber . "/" . count . " (press " . A_Index . "/" . totalPresses . ", keyboard)")
+                }
             }
-        } catch {
-            Echo("Previous button not found, trying keyboard fallback")
+            
+            ; Small delay between presses to allow UI to update
+            if (A_Index < totalPresses) {
+                Sleep(300)
+            }
         }
         
-        ; Method 2: Keyboard fallback with aggressive focus clearing
-        AggressiveFocusClear(cUIA)
-        cUIA.Send("+p")  ; Shift+P
-        Sleep(100)        
-        cUIA.Send("+p")  ; Shift+P (double-tap for reliability)
-        Echo("Previous song (keyboard)")
+        if (count == 1) {
+            Echo("Skipped to previous song")
+        } else {
+            Echo("Skipped " . count . " songs backward")
+        }
         
     } catch Error as e {
-        Echo("Error playing previous song: " . e.message)
-        throw Error("Failed to play previous song")
+        Echo("Error skipping previous songs: " . e.message)
+        throw Error("Failed to skip previous songs")
     }
+}
+
+; Legacy function for backward compatibility
+PreviousSong() {
+    PreviousSongs(1)
 }
 
 ; Forward by specified seconds (using 10s and 1s increments)

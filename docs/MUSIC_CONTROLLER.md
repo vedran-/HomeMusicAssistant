@@ -77,26 +77,29 @@ music_controller.ahk toggle
 - Falls back to Space key if no buttons found
 - Shows button counts in debug popup
 
-#### `next`
-Plays the next song in the current playlist/queue.
+#### `next [count]`
+Plays the next song(s) in the current playlist/queue. Supports skipping multiple songs at once.
 
 **Examples:**
 ```bash
-music_controller.ahk next
+music_controller.ahk next         # Next 1 song (default)
+music_controller.ahk next 3       # Skip next 3 songs
+music_controller.ahk next 5       # Skip next 5 songs
 ```
 
-**Technical:** Sends `Shift+N` keyboard shortcut
+**Technical:** Uses `Shift+N` keyboard shortcut or Next button clicking, repeated for the specified count.
 
-#### `previous` / `prev`
-Plays the previous song in the current playlist/queue.
+#### `previous [count]` / `prev [count]`
+Plays the previous song(s) in the current playlist/queue. Supports going back multiple songs with asymmetric behavior handling.
 
 **Examples:**
 ```bash
-music_controller.ahk previous
-music_controller.ahk prev
+music_controller.ahk previous     # Previous 1 song (default)
+music_controller.ahk prev 2       # Go back 2 songs  
+music_controller.ahk previous 4   # Go back 4 songs
 ```
 
-**Technical:** Sends `Shift+P` keyboard shortcut
+**Technical:** Uses `Shift+P` keyboard shortcut or Previous button clicking. **Note:** Due to YouTube Music's behavior, going back N songs requires N+1 button presses (first press rewinds current song to start, subsequent presses go to previous songs).
 
 ### Time Navigation Commands
 
@@ -244,7 +247,9 @@ The music controller integrates with the Home Assistant Voice Control System. Vo
 - *"Play Boards of Canada"* → `play_music` with `action: "play"`, `search_term: "Boards of Canada"`
 - *"Pause the music"* → `play_music` with `action: "pause"`
 - *"Next song"* → `play_music` with `action: "next"`
+- *"Skip next 3 songs"* → `play_music` with `action: "next"`, `count: 3`
 - *"Previous song"* → `play_music` with `action: "previous"`
+- *"Go back 2 songs"* → `play_music` with `action: "previous"`, `count: 2`
 
 **Advanced Controls (`music_control` tool)**:
 - *"Go forward 30 seconds"* → `music_control` with `action: "forward"`, `amount: 30`
