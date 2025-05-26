@@ -190,7 +190,7 @@ class YouTubeMusicAPIController:
             return response["state"]
         return None
     
-    def volume_up(self, amount: int = 10) -> Dict[str, Any]:
+    def volume_up(self, amount: int = 100) -> Dict[str, Any]:
         """
         Increase the volume.
         
@@ -208,7 +208,7 @@ class YouTubeMusicAPIController:
             return result
         return {"success": False, "error": "Failed to get current volume"}
     
-    def volume_down(self, amount: int = 10) -> Dict[str, Any]:
+    def volume_down(self, amount: int = 50) -> Dict[str, Any]:
         """
         Decrease the volume.
         
@@ -220,7 +220,7 @@ class YouTubeMusicAPIController:
         """
         current_volume = self.get_volume()
         if current_volume is not None:
-            new_volume = max(0, current_volume - amount)
+            new_volume = max(1, current_volume - amount)
             result = self.set_volume(new_volume)
             result["new_volume"] = new_volume
             return result
