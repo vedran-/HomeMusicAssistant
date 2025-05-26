@@ -59,26 +59,7 @@ def execute_tool_call(tool_registry: ToolRegistry, tts_client: PiperTTSClient, t
         tool_name = tool_call.get("tool_name")
         parameters = tool_call.get("parameters", {})
         
-        # Handle special TTS tool for speaking responses
-        if tool_name == "speak_response":
-            text_to_speak = parameters.get("text", "")
-            if text_to_speak and tts_client.is_available():
-                app_logger.info(f"🗣️ Assistant response: '{text_to_speak}'")
-                tts_client.speak_async(text_to_speak)
-                return {
-                    "success": True,
-                    "feedback": "Response spoken",
-                    "output": text_to_speak
-                }
-            else:
-                app_logger.info(f"📝 Assistant response: '{text_to_speak}'")
-                return {
-                    "success": True,
-                    "feedback": "Response provided (TTS unavailable)",
-                    "output": text_to_speak
-                }
-        
-        # Execute regular tool calls
+        # Execute tool calls
         result = tool_registry.execute_tool_call(tool_call)
         
         # Log the result
@@ -198,6 +179,10 @@ def run_voice_assistant(settings: AppSettings):
                         app_logger.info("🔊 Volume control command executed")
                     elif tool_name == "system_control":
                         app_logger.info("💻 System control command executed")
+                    elif tool_name == "speak_response":
+                        app_logger.info("🗣️ Informational response provided")
+                    elif tool_name == "get_time":
+                        app_logger.info("🕐 Time information provided")
                     elif tool_name == "unknown_request":
                         app_logger.info("❓ Unknown request handled")
                 else:

@@ -80,6 +80,8 @@ class ToolRegistry:
                 return self._handle_unknown_request(parameters)
             elif tool_name == "get_time":
                 return self._execute_get_time(parameters)
+            elif tool_name == "speak_response":
+                return self._execute_speak_response(parameters)
             else:
                 app_logger.error(f"Unknown tool name: {tool_name}")
                 return {
@@ -399,6 +401,44 @@ class ToolRegistry:
     def _minute_word(self, minute: int) -> str:
         """Return 'minute' or 'minutes' based on the number."""
         return "minute" if minute == 1 else "minutes"
+
+    def _execute_speak_response(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute speak_response tool to provide informational responses."""
+        message = parameters.get("message", "")
+        response_type = parameters.get("response_type", "fact")
+        
+        # Validation
+        if not message or not message.strip():
+            return {
+                "success": False,
+                "error": "Empty message provided",
+                "feedback": "No response to speak"
+            }
+        
+        # Length validation to prevent abuse
+        if len(message) > 500:
+            app_logger.warning(f"Speak response message too long ({len(message)} chars), truncating")
+            message = message[:500] + "..."
+        
+        # Basic content filtering (prevent system commands or suspicious content)
+        suspicious_keywords = ["system", "execute", "run", "cmd", "powershell", "bash", "script"]
+        message_lower = message.lower()
+        if any(keyword in message_lower for keyword in suspicious_keywords):
+            app_logger.warning(f"Suspicious content detected in speak response: {message}")
+            return {
+                "success": False,
+                "error": "Suspicious content detected",
+                "feedback": "I can't speak that response"
+            }
+        
+        app_logger.info(f"Speaking informational response ({response_type}): '{message[:50]}{'...' if len(message) > 50 else ''}'")
+        
+        return {
+            "success": True,
+            "output": message,
+            "feedback": message,  # This will be spoken by the TTS system
+            "response_type": response_type
+        }
 
     def _run_autohotkey_script(self, script_path: Path, args: List[str]) -> Dict[str, Any]:
         """

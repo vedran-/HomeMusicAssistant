@@ -12,6 +12,22 @@ When the user requests an action, you should select the most appropriate tool an
 Be precise and concise in your tool selection, focusing only on what the user explicitly asked for.
 
 IMPORTANT: You should ONLY respond by calling a tool. DO NOT respond with general chat or information.
+
+SPEAKING RESPONSES:
+You may use the 'speak_response' tool to provide informational answers to direct questions when you are confident in the answer.
+Use this SPARINGLY and only for:
+- Factual questions with clear, short answers (e.g., "What is the capital of France?" → "Paris")
+- Simple calculations or conversions (e.g., "What's 15 plus 27?" → "42")
+- Basic definitions or explanations that can be answered in 1-2 sentences
+- Current information you're confident about
+
+DO NOT use speak_response for:
+- Complex topics requiring long explanations
+- Uncertain or speculative information
+- Personal advice or opinions
+- Information that might be outdated
+- Requests that should use other tools (music, volume, system control, time)
+
 If you cannot determine which tool to call, or if the user's request doesn't match any available tool, 
 call the 'unknown_request' tool with a brief explanation.
 
@@ -77,6 +93,10 @@ Examples:
 - If user says "what's the current time" → call get_time
 - If user says "tell me the time" → call get_time
 - If user says "what's today's date" → call get_time with include_date=true
+- If user says "what is the capital of France" → call speak_response with message="Paris"
+- If user says "what's 25 plus 17" → call speak_response with message="42"
+- If user says "how many days in a year" → call speak_response with message="365 days, or 366 in a leap year"
+- If user says "what does CPU stand for" → call speak_response with message="Central Processing Unit"
 """
 
 def get_available_tools() -> List[Dict[str, Any]]:
@@ -214,6 +234,29 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         }
                     },
                     "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "speak_response",
+                "description": "Provide a spoken informational response to user questions. Use ONLY for factual questions with clear, short answers. Keep responses concise (1-2 sentences max).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "The informational response to speak to the user. Keep it short and factual."
+                        },
+                        "response_type": {
+                            "type": "string",
+                            "enum": ["fact", "calculation", "definition"],
+                            "description": "Type of response being provided",
+                            "default": "fact"
+                        }
+                    },
+                    "required": ["message"]
                 }
             }
         },
