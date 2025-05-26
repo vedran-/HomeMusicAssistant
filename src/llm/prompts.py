@@ -191,7 +191,7 @@ def get_available_tools() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "get_time",
-                "description": "Get the current system time and optionally the date. Use this when user asks for time, current time, or date.",
+                "description": "Get the current system time and optionally the date in human-friendly format (e.g., '14 hours and 27 minutes'). Use this when user asks for time, current time, or date.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -203,7 +203,7 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         "format": {
                             "type": "string",
                             "enum": ["12hour", "24hour", "auto"],
-                            "description": "Time format preference. 'auto' uses system default. Default: 'auto'.",
+                            "description": "Time format preference. 'auto' uses 24-hour format (default). Default: 'auto'.",
                             "default": "auto"
                         }
                     },

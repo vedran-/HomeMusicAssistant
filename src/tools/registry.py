@@ -350,13 +350,22 @@ class ToolRegistry:
         try:
             now = datetime.now()
             
-            # Determine time format
+            # Create human-friendly time format
+            hour = now.hour
+            minute = now.minute
+            
+            # Convert to 12-hour format if requested
             if time_format == "12hour":
-                time_str = now.strftime('%I:%M:%S %p')
-            elif time_format == "24hour":
-                time_str = now.strftime('%H:%M:%S')
-            else:  # auto - use system default (12-hour for most Windows systems)
-                time_str = now.strftime('%I:%M:%S %p')
+                am_pm = "AM" if hour < 12 else "PM"
+                display_hour = hour if hour <= 12 else hour - 12
+                if display_hour == 0:
+                    display_hour = 12
+                time_str = f"{display_hour} {self._hour_word(display_hour)} and {minute} {self._minute_word(minute)} {am_pm}"
+            elif time_format == "24hour" or time_format == "auto":  # Default to 24-hour
+                time_str = f"{hour} {self._hour_word(hour)} and {minute} {self._minute_word(minute)}"
+            else:
+                # Fallback to 24-hour
+                time_str = f"{hour} {self._hour_word(hour)} and {minute} {self._minute_word(minute)}"
             
             # Add date if requested
             if include_date:
@@ -382,6 +391,14 @@ class ToolRegistry:
                 "error": str(e),
                 "feedback": "Sorry, I couldn't get the current time"
             }
+    
+    def _hour_word(self, hour: int) -> str:
+        """Return 'hour' or 'hours' based on the number."""
+        return "hour" if hour == 1 else "hours"
+    
+    def _minute_word(self, minute: int) -> str:
+        """Return 'minute' or 'minutes' based on the number."""
+        return "minute" if minute == 1 else "minutes"
 
     def _run_autohotkey_script(self, script_path: Path, args: List[str]) -> Dict[str, Any]:
         """
