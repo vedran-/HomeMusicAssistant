@@ -17,6 +17,8 @@ It should have basic voice control for music, system volume, sending the machine
  - openwakeword container for wake word detection (openwakeword: image: rhasspy/wyoming-openwakeword)
  - tool `music_controller.ahk` to control music volume (check @tools/music_controller.md for more info)
  - AutoHotkey v2 with UIAutomation v2 for writing custom tools
+ - Piper (text to speech): rhasspy/wyoming-piper:latest
+
 
 
 ## Future Scope
@@ -26,9 +28,8 @@ Home Assistant to control different devices.
   homeassistant:
     image: homeassistant/home-assistant:latest  
 
-Piper (text to speech)
-  piper:
-    image: rhasspy/wyoming-piper:latest
-
 But this is out of scope for now.
 
+# TODO
+- Add support for MCP and general internet use
+- Add support for Home Assistant

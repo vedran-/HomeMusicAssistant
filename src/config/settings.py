@@ -49,6 +49,7 @@ class TTSSettings(BaseModel):
     models_dir: DirectoryPath = Field(default="./models/piper", description="Directory to store Piper voice models")
     sample_rate: int = Field(default=22050, description="Audio sample rate for TTS output")
     speak_responses: bool = Field(default=True, description="Speak LLM responses and tool feedback")
+    max_speech_length: int = Field(default=10000, description="Maximum character length for TTS speech (will truncate longer text)")
 
     @validator('models_dir', pre=True, always=True)
     def resolve_models_dir(cls, v):

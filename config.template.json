@@ -38,6 +38,7 @@
     "use_cuda": true,
     "models_dir": "./models/piper",
     "sample_rate": 22050,
-    "speak_responses": true
+    "speak_responses": true,
+    "max_speech_length": 10000
   }
 }

@@ -69,8 +69,24 @@ def execute_tool_call(tool_registry: ToolRegistry, tts_client: PiperTTSClient, t
             # Speak tool feedback if TTS is enabled
             if tts_client.is_available() and tts_client.tts_settings.speak_responses:
                 feedback_text = result.get('feedback', '')
-                if feedback_text and len(feedback_text) < 200:  # Don't speak very long feedback
-                    tts_client.speak_async(feedback_text, interrupt_current=False)
+                if feedback_text:
+                    # Handle text length with smart truncation
+                    max_length = tts_client.tts_settings.max_speech_length
+                    if len(feedback_text) > max_length:
+                        original_length = len(feedback_text)
+                        truncated_text = feedback_text[:max_length]
+                        # Add truncation notice
+                        truncation_notice = f"Note: This text has been truncated from {original_length} characters. Here are the first {max_length} characters: "
+                        # Adjust for the notice length to stay within limit
+                        available_length = max_length - len(truncation_notice)
+                        if available_length > 0:
+                            final_text = truncation_notice + feedback_text[:available_length]
+                        else:
+                            # If notice is too long, just truncate without notice
+                            final_text = feedback_text[:max_length]
+                        tts_client.speak_async(final_text, interrupt_current=False)
+                    else:
+                        tts_client.speak_async(feedback_text, interrupt_current=False)
             
             # Make tool output more prominent in console/log
             if result.get("output"):

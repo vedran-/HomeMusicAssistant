@@ -68,7 +68,7 @@ class LiteLLMClient:
         
         return {
             "tool_name": "speak_response",
-            "parameters": {"text": message}
+            "parameters": {"message": message}
         }
 
     def _make_llm_call(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Any:
@@ -156,7 +156,7 @@ class LiteLLMClient:
                     if text_response:
                         return {
                             "tool_name": "speak_response",
-                            "parameters": {"text": text_response}
+                            "parameters": {"message": text_response}
                         }
                     return None
                     
