@@ -26,6 +26,7 @@ class AudioSettings(BaseModel):
     sample_rate: int = Field(default=16000)
     wake_word_sensitivity: float = Field(default=0.5)
     silence_threshold_seconds: float = Field(default=4.0, description="How long to wait for silence before stopping voice recording (in seconds). Increase for longer speech, decrease for quicker responses.")
+    initial_silence_allowance_seconds: float = Field(default=5.0, description="How long to allow initial silence at the start of recording before the user speaks (in seconds). This gives users time to think before speaking.")
 
 class PathsSettings(BaseModel):
     autohotkey_exe: FilePath

@@ -19,7 +19,8 @@
     "input_device_name_keyword": null,
     "sample_rate": 16000,
     "wake_word_sensitivity": 0.5,
-    "silence_threshold_seconds": 3.0
+    "silence_threshold_seconds": 2.0,
+    "initial_silence_allowance_seconds": 5.0
   },
   "paths": {
     "autohotkey_exe": "C:\\Program Files\\AutoHotkey\\v2\\AutoHotkey64.exe",

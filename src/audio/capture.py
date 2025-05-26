@@ -18,6 +18,7 @@ class AudioCapturer:
         self.channels = 1
         self.format = pyaudio.paInt16  # Corresponds to 2 bytes per sample
         self.silence_threshold_seconds = self.settings.audio_settings.silence_threshold_seconds
+        self.initial_silence_allowance_seconds = self.settings.audio_settings.initial_silence_allowance_seconds
         
         # Audio energy threshold for silence detection. This might need tuning.
         # It's a heuristic. Lower values are more sensitive to noise.
@@ -142,10 +143,20 @@ class AudioCapturer:
         app_logger.info("Recording... Speak now.")
 
         frames = []
-        silent_chunks_count = 0
-        max_silent_chunks = int(self.silence_threshold_seconds * self.sample_rate / self.chunk_size)
-        if max_silent_chunks == 0:
-            max_silent_chunks = 1 
+        speech_detected = False  # Track if we've detected any speech
+        initial_silent_chunks_count = 0
+        post_speech_silent_chunks_count = 0
+        
+        # Calculate chunk thresholds
+        max_initial_silent_chunks = int(self.initial_silence_allowance_seconds * self.sample_rate / self.chunk_size)
+        max_post_speech_silent_chunks = int(self.silence_threshold_seconds * self.sample_rate / self.chunk_size)
+        
+        if max_initial_silent_chunks == 0:
+            max_initial_silent_chunks = 1
+            app_logger.warning(f"Initial silence allowance ({self.initial_silence_allowance_seconds}s) is very short relative to chunk size. Effective duration might be up to one chunk time ({self.chunk_size/self.sample_rate:.2f}s).")
+        
+        if max_post_speech_silent_chunks == 0:
+            max_post_speech_silent_chunks = 1 
             app_logger.warning(f"Silence threshold ({self.silence_threshold_seconds}s) is very short relative to chunk size. Effective silence duration might be up to one chunk time ({self.chunk_size/self.sample_rate:.2f}s).")
 
         recording_started_time = time.time()
@@ -156,14 +167,30 @@ class AudioCapturer:
                 audio_chunk = stream.read(self.chunk_size, exception_on_overflow=False)
                 frames.append(audio_chunk)
 
-                if self._is_silent(audio_chunk):
-                    silent_chunks_count += 1
+                is_silent = self._is_silent(audio_chunk)
+                
+                if not speech_detected:
+                    # We're in the initial phase - waiting for first speech
+                    if is_silent:
+                        initial_silent_chunks_count += 1
+                        if initial_silent_chunks_count >= max_initial_silent_chunks:
+                            app_logger.info(f"Initial silence timeout ({self.initial_silence_allowance_seconds}s) reached before any speech detected. Stopping recording.")
+                            break
+                    else:
+                        # First non-silent chunk detected - speech has started
+                        speech_detected = True
+                        post_speech_silent_chunks_count = 0
+                        app_logger.info("Speech detected. Now monitoring for end-of-speech silence.")
                 else:
-                    silent_chunks_count = 0
-
-                if silent_chunks_count >= max_silent_chunks:
-                    app_logger.info(f"Silence detected for {self.silence_threshold_seconds} seconds. Stopping recording.")
-                    break
+                    # We're in the post-speech phase - waiting for end silence
+                    if is_silent:
+                        post_speech_silent_chunks_count += 1
+                        if post_speech_silent_chunks_count >= max_post_speech_silent_chunks:
+                            app_logger.info(f"End-of-speech silence detected for {self.silence_threshold_seconds} seconds. Stopping recording.")
+                            break
+                    else:
+                        # Reset silence counter when we detect more speech
+                        post_speech_silent_chunks_count = 0
                 
                 if time.time() - recording_started_time > max_recording_duration:
                     app_logger.warning(f"Max recording duration of {max_recording_duration}s reached. Stopping.")
@@ -187,6 +214,11 @@ class AudioCapturer:
         
         if not frames:
             app_logger.warning("No audio was recorded.")
+            return None
+        
+        # Check if we never detected any speech (entire recording was silence)
+        if not speech_detected:
+            app_logger.info("No speech detected in the entire recording (silence-only). Skipping processing.")
             return None
 
         temp_dir = tempfile.gettempdir()
