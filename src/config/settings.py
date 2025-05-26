@@ -14,6 +14,7 @@ class LiteLLMSettings(BaseModel):
     provider: str = Field(default="openai")
     model: str = Field(default="gpt-3.5-turbo")
     api_key: Optional[str] = Field(default=None)
+    debug_mode: bool = Field(default=False, description="Enable LiteLLM debug mode for detailed error logging")
 
 class TranscriptionSettings(BaseModel):
     whisper_instructions: Optional[str] = Field(default=None, description="Instructions to provide to Whisper for better transcription accuracy")

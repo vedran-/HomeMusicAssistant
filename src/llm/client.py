@@ -1,6 +1,9 @@
 from litellm import completion
+import litellm
 from typing import Dict, Any, Optional, List
 import json
+import time
+import random
 
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
@@ -12,13 +15,49 @@ class LiteLLMClient:
         self.model = settings.litellm_settings.model
         self.api_key = settings.litellm_settings.api_key
         
+        # Retry configuration
+        self.max_retries = 3
+        self.base_delay = 1.0  # Base delay in seconds
+        self.max_delay = 10.0  # Maximum delay in seconds
+        
+        # Enable debug mode if needed (can be controlled via environment or config)
+        self.debug_mode = getattr(settings.litellm_settings, 'debug_mode', False)
+        if self.debug_mode:
+            litellm.set_verbose = True
+            app_logger.info("LiteLLM debug mode enabled")
+        
         # API key for LiteLLM may be optional if using local models
         if not self.api_key and self.provider not in ["local"]:
             app_logger.warning(f"No API key provided for LiteLLM provider '{self.provider}'. Some providers require an API key.")
 
+    def _calculate_delay(self, attempt: int) -> float:
+        """Calculate exponential backoff delay with jitter"""
+        delay = min(self.base_delay * (2 ** attempt), self.max_delay)
+        # Add jitter to prevent thundering herd
+        jitter = random.uniform(0.1, 0.3) * delay
+        return delay + jitter
+
+    def _make_llm_call(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Any:
+        """Make a single LiteLLM API call with proper error handling"""
+        try:
+            response = completion(
+                model=self.model,
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",  # Let the model decide whether to use tools
+                api_key=self.api_key if self.api_key else None,
+                temperature=0.1  # Lower temperature for more deterministic responses
+            )
+            return response
+        except Exception as e:
+            # Log the specific error for debugging
+            app_logger.error(f"LiteLLM API call failed: {type(e).__name__}: {e}")
+            raise
+
     def process_transcript(self, transcript: str, system_prompt: str, tools: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """
         Send transcribed text to an LLM for processing with provided system prompt and tools.
+        Includes retry logic for robustness.
         
         Args:
             transcript: The transcribed text from the user's speech
@@ -32,67 +71,75 @@ class LiteLLMClient:
             app_logger.warning("Empty transcript provided to LLM client.")
             return None
             
-        try:
-            app_logger.info(f"Sending transcript to LLM ({self.provider}/{self.model}): '{transcript}'")
-            
-            # Prepare messages for the LLM
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": transcript}
-            ]
-            
-            # Make the API call to LiteLLM
-            response = completion(
-                model=self.model,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",  # Let the model decide whether to use tools
-                api_key=self.api_key if self.api_key else None,
-                temperature=0.1  # Lower temperature for more deterministic responses
-            )
-            
-            # Process the response
-            if not response or not response.choices:
-                app_logger.error("LLM returned an empty response or no choices.")
-                return None
+        # Prepare messages for the LLM
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": transcript}
+        ]
+        
+        # Retry logic with exponential backoff
+        last_exception = None
+        for attempt in range(self.max_retries):
+            try:
+                app_logger.info(f"Sending transcript to LLM ({self.provider}/{self.model}) - Attempt {attempt + 1}/{self.max_retries}: '{transcript}'")
                 
-            first_choice = response.choices[0]
-            
-            # Check if the LLM used a tool
-            if hasattr(first_choice, 'message') and hasattr(first_choice.message, 'tool_calls') and first_choice.message.tool_calls:
-                tool_call = first_choice.message.tool_calls[0]  # Get the first tool call
+                # Make the API call to LiteLLM
+                response = self._make_llm_call(messages, tools)
                 
-                # Parse the function call arguments from JSON string to dict
-                try:
-                    arguments = json.loads(tool_call.function.arguments)
-                except json.JSONDecodeError:
-                    app_logger.error(f"Failed to parse tool arguments: {tool_call.function.arguments}")
+                # Process the response
+                if not response or not response.choices:
+                    app_logger.error("LLM returned an empty response or no choices.")
                     return None
+                    
+                first_choice = response.choices[0]
                 
-                tool_response = {
-                    "tool_name": tool_call.function.name,
-                    "parameters": arguments
-                }
-                
-                app_logger.info(f"LLM selected tool: {tool_response['tool_name']} with parameters: {tool_response['parameters']}")
-                return tool_response
-                
-            else:
-                # The LLM didn't use a tool, but provided a text response
-                text_response = first_choice.message.content if hasattr(first_choice, 'message') and hasattr(first_choice.message, 'content') else None
-                app_logger.info(f"LLM provided a text response without tool call: '{text_response}'")
-                
-                # Return text response for TTS - this allows the assistant to speak responses
-                if text_response:
-                    return {
-                        "tool_name": "speak_response",
-                        "parameters": {"text": text_response}
+                # Check if the LLM used a tool
+                if hasattr(first_choice, 'message') and hasattr(first_choice.message, 'tool_calls') and first_choice.message.tool_calls:
+                    tool_call = first_choice.message.tool_calls[0]  # Get the first tool call
+                    
+                    # Parse the function call arguments from JSON string to dict
+                    try:
+                        arguments = json.loads(tool_call.function.arguments)
+                    except json.JSONDecodeError:
+                        app_logger.error(f"Failed to parse tool arguments: {tool_call.function.arguments}")
+                        return None
+                    
+                    tool_response = {
+                        "tool_name": tool_call.function.name,
+                        "parameters": arguments
                     }
-                return None
+                    
+                    app_logger.info(f"LLM selected tool: {tool_response['tool_name']} with parameters: {tool_response['parameters']}")
+                    return tool_response
+                    
+                else:
+                    # The LLM didn't use a tool, but provided a text response
+                    text_response = first_choice.message.content if hasattr(first_choice, 'message') and hasattr(first_choice.message, 'content') else None
+                    app_logger.info(f"LLM provided a text response without tool call: '{text_response}'")
+                    
+                    # Return text response for TTS - this allows the assistant to speak responses
+                    if text_response:
+                        return {
+                            "tool_name": "speak_response",
+                            "parameters": {"text": text_response}
+                        }
+                    return None
+                    
+            except Exception as e:
+                last_exception = e
+                app_logger.warning(f"LLM call attempt {attempt + 1}/{self.max_retries} failed: {type(e).__name__}: {e}")
                 
-        except Exception as e:
-            app_logger.error(f"Error processing transcript with LLM: {e}", exc_info=True)
-            return None
+                # If this is the last attempt, don't wait
+                if attempt < self.max_retries - 1:
+                    delay = self._calculate_delay(attempt)
+                    app_logger.info(f"Retrying in {delay:.2f} seconds...")
+                    time.sleep(delay)
+                else:
+                    app_logger.error(f"All {self.max_retries} LLM call attempts failed. Last error: {e}", exc_info=True)
+        
+        # If we get here, all retries failed
+        app_logger.error(f"Failed to process transcript after {self.max_retries} attempts. Final error: {last_exception}")
+        return None
 
 
 if __name__ == "__main__":

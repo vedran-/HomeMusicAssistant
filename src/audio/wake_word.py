@@ -230,8 +230,8 @@ class WakeWordDetector:
                     
                     # Add a longer cooldown period to prevent immediate re-triggering
                     # This gives time for any residual audio/echo to clear
-                    self.chunks_to_skip = 20 # e.g., 20 * 80ms = 1600ms cooldown
-                    
+                    self.chunks_to_skip = 30 # e.g., 30 * 80ms = 2400ms cooldown
+
                     play_wake_word_accepted_sound() # Play sound after stopping other things
                     
                     return True
