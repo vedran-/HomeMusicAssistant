@@ -17,8 +17,9 @@ class LiteLLMClient:
         
         # Retry configuration
         self.max_retries = 3
-        self.base_delay = 1.0  # Base delay in seconds
-        self.max_delay = 10.0  # Maximum delay in seconds
+        self.base_delay = 2.0  # Base delay in seconds (quick retries for real-time feel)
+        self.max_delay = 10.0  # Maximum delay in seconds (keep it short for UX)
+        self.rate_limit_delay = 5.0  # Quick delay for rate limit errors (real-time UX)
         
         # Enable debug mode if needed (can be controlled via environment or config)
         self.debug_mode = getattr(settings.litellm_settings, 'debug_mode', False)
@@ -30,12 +31,45 @@ class LiteLLMClient:
         if not self.api_key and self.provider not in ["local"]:
             app_logger.warning(f"No API key provided for LiteLLM provider '{self.provider}'. Some providers require an API key.")
 
-    def _calculate_delay(self, attempt: int) -> float:
+    def _calculate_delay(self, attempt: int, is_rate_limit: bool = False) -> float:
         """Calculate exponential backoff delay with jitter"""
-        delay = min(self.base_delay * (2 ** attempt), self.max_delay)
-        # Add jitter to prevent thundering herd
-        jitter = random.uniform(0.1, 0.3) * delay
-        return delay + jitter
+        if is_rate_limit:
+            # For rate limit errors, use a shorter fixed delay with jitter for real-time UX
+            base_delay = self.rate_limit_delay
+            jitter = random.uniform(0.1, 0.3) * base_delay  # Reduced jitter for shorter delays
+            return base_delay + jitter
+        else:
+            # Standard exponential backoff
+            delay = min(self.base_delay * (2 ** attempt), self.max_delay)
+            # Add jitter to prevent thundering herd
+            jitter = random.uniform(0.1, 0.2) * delay  # Reduced jitter for shorter delays
+            return delay + jitter
+
+    def _is_rate_limit_error(self, exception: Exception) -> bool:
+        """Check if the exception is a rate limit error"""
+        error_str = str(exception).lower()
+        return any(phrase in error_str for phrase in [
+            'rate limit', 'ratelimit', 'rate_limit', 
+            'too many requests', 'quota exceeded',
+            'tokens per minute', 'tpm'
+        ])
+
+    def _create_rate_limit_fallback_response(self) -> Dict[str, Any]:
+        """Create a fallback response when rate limits are exceeded"""
+        fallback_messages = [
+            "I'm experiencing high demand right now. Please wait a few seconds and try again.",
+            "The AI service is temporarily busy. Please try your request again in a moment.",
+            "I'm currently rate limited. Please wait a few seconds before making another request.",
+            "The system is experiencing high traffic. Please try again shortly."
+        ]
+        
+        # Pick a random message to avoid repetition
+        message = random.choice(fallback_messages)
+        
+        return {
+            "tool_name": "speak_response",
+            "parameters": {"text": message}
+        }
 
     def _make_llm_call(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Any:
         """Make a single LiteLLM API call with proper error handling"""
@@ -79,6 +113,7 @@ class LiteLLMClient:
         
         # Retry logic with exponential backoff
         last_exception = None
+        rate_limit_failures = 0  # Track consecutive rate limit failures
         for attempt in range(self.max_retries):
             try:
                 app_logger.info(f"Sending transcript to LLM ({self.provider}/{self.model}) - Attempt {attempt + 1}/{self.max_retries}: '{transcript}'")
@@ -127,15 +162,35 @@ class LiteLLMClient:
                     
             except Exception as e:
                 last_exception = e
-                app_logger.warning(f"LLM call attempt {attempt + 1}/{self.max_retries} failed: {type(e).__name__}: {e}")
+                is_rate_limit = self._is_rate_limit_error(e)
                 
-                # If this is the last attempt, don't wait
-                if attempt < self.max_retries - 1:
-                    delay = self._calculate_delay(attempt)
-                    app_logger.info(f"Retrying in {delay:.2f} seconds...")
-                    time.sleep(delay)
+                if is_rate_limit:
+                    rate_limit_failures += 1
+                    app_logger.warning(f"LLM call attempt {attempt + 1}/{self.max_retries} failed due to rate limiting: {e}")
+                    
+                    # If we've had multiple rate limit failures, return fallback response immediately
+                    if rate_limit_failures >= 2:
+                        app_logger.info("Multiple rate limit failures detected. Returning fallback response for better UX.")
+                        return self._create_rate_limit_fallback_response()
                 else:
-                    app_logger.error(f"All {self.max_retries} LLM call attempts failed. Last error: {e}", exc_info=True)
+                    app_logger.warning(f"LLM call attempt {attempt + 1}/{self.max_retries} failed: {type(e).__name__}: {e}")
+                
+                # If this is the last attempt, check if it's a rate limit issue
+                if attempt >= self.max_retries - 1:
+                    if is_rate_limit:
+                        app_logger.info("Final attempt failed due to rate limiting. Returning fallback response.")
+                        return self._create_rate_limit_fallback_response()
+                    else:
+                        app_logger.error(f"All {self.max_retries} LLM call attempts failed. Last error: {e}", exc_info=True)
+                        break
+                
+                # Calculate delay for next attempt
+                delay = self._calculate_delay(attempt, is_rate_limit)
+                if is_rate_limit:
+                    app_logger.info(f"Rate limit detected. Retrying in {delay:.2f} seconds...")
+                else:
+                    app_logger.info(f"Retrying in {delay:.2f} seconds...")
+                time.sleep(delay)
         
         # If we get here, all retries failed
         app_logger.error(f"Failed to process transcript after {self.max_retries} attempts. Final error: {last_exception}")

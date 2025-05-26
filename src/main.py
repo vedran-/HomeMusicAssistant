@@ -22,13 +22,13 @@ def initialize_components(settings: AppSettings):
     # Configure logging based on settings
     configure_logging(settings.logging.level)
     
-    # Initialize components
-    wake_detector = WakeWordDetector(settings)
+    # Initialize components (TTS client first so wake detector can use it)
+    tts_client = PiperTTSClient(settings)
+    wake_detector = WakeWordDetector(settings, tts_client)
     audio_capturer = AudioCapturer(settings)
     transcriber = GroqTranscriber(settings)
     llm_client = LiteLLMClient(settings)
     tool_registry = ToolRegistry(settings)
-    tts_client = PiperTTSClient(settings)
     
     # Log available microphones for user reference
     audio_capturer.list_available_microphones()
