@@ -133,6 +133,18 @@ class PiperTTSClient:
             with self._speaking_lock:
                 self.is_speaking = False
     
+    def _get_wav_duration(self, wav_file_path: str) -> float:
+        """Get the duration of a WAV file by parsing its header."""
+        try:
+            with wave.open(wav_file_path, 'rb') as wav_file:
+                frames = wav_file.getnframes()
+                sample_rate = wav_file.getframerate()
+                duration = frames / float(sample_rate)
+                return duration
+        except Exception as e:
+            app_logger.warning(f"Failed to parse WAV duration: {e}")
+            return 2.0  # fallback duration
+
     def _speak_text(self, text: str, audio_file_path: str, volume: float = 1.0, speech_id: Optional[str] = None, interrupt_current: bool = True):
         """Internal method to handle the actual text-to-speech conversion and playback."""
         try:
@@ -172,21 +184,13 @@ class PiperTTSClient:
                     # Use non-blocking play for immediate interruption capability
                     player.play(block=False)
                     
-                    # Since audioplayer doesn't have is_playing(), we'll use a different approach
-                    # We'll track the start time and estimated duration, checking for interruption signals
+                    # Get accurate duration by parsing WAV header
                     start_time = time.time()
+                    actual_duration = self._get_wav_duration(temp_path)
+                    app_logger.debug(f"[TTS Speak ID: {speech_id}] Audio duration: {actual_duration:.2f} seconds")
                     
-                    # Estimate duration from file size (rough approximation)
-                    # For a more accurate approach, we could parse the WAV header, but this is simpler
-                    try:
-                        file_size = os.path.getsize(temp_path)
-                        # Rough estimate: 44100 Hz * 2 bytes * 1 channel = ~88KB per second
-                        estimated_duration = max(0.1, file_size / 88000)  # minimum 0.1 seconds
-                    except:
-                        estimated_duration = 2.0  # fallback duration
-                    
-                    # Wait for estimated playback duration while checking for stop signals
-                    while time.time() - start_time < estimated_duration:
+                    # Wait for actual playback duration while checking for stop signals
+                    while time.time() - start_time < actual_duration:
                         # Check if we should stop (current_player was changed or cleared)
                         with self._player_lock:
                             if self.current_player != player or self._current_speech_id != speech_id:
