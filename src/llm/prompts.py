@@ -15,6 +15,12 @@ IMPORTANT: You should ONLY respond by calling a tool. DO NOT respond with genera
 If you cannot determine which tool to call, or if the user's request doesn't match any available tool, 
 call the 'unknown_request' tool with a brief explanation.
 
+CRITICAL RULE FOR VOLUME CONTROL:
+- For RELATIVE changes (increase/decrease BY X): use action="up" or "down" with amount=X
+- For ABSOLUTE settings (set TO X): use action="set" with amount=X
+- Pay attention to keywords: "by", "increase by", "decrease by", "up by" = relative change
+- Pay attention to keywords: "to", "set to", "volume to" = absolute setting
+
 CRITICAL RULE FOR MUSIC: 
 Whenever the user says "play" followed by a search query, always use the play_music tool with action="play" and the search_term.
 If the user explicitly mentions "radio" (e.g., "play Pink Floyd radio"), set play_type="radio".
@@ -39,7 +45,14 @@ Examples:
 - If user says "like this song" → call music_control with action="like"
 - If user says "turn on shuffle" → call music_control with action="shuffle"
 - If user says "turn up the volume" → call control_volume with action="up"
+- If user says "increase volume by 20" → call control_volume with action="up", amount=20
+- If user says "turn volume up 30%" → call control_volume with action="up", amount=30
+- If user says "make it louder by 15" → call control_volume with action="up", amount=15
+- If user says "turn down the volume" → call control_volume with action="down"
+- If user says "decrease volume by 25" → call control_volume with action="down", amount=25
+- If user says "lower volume by 10%" → call control_volume with action="down", amount=10
 - If user says "set volume to 50" → call control_volume with action="set", amount=50
+- If user says "volume to 75%" → call control_volume with action="set", amount=75
 - If user says "put the computer to sleep" → call system_control with action="sleep"
 - If user says "restart the computer" → call system_control with action="restart"
 - If user says "what time is it" → call unknown_request with reason="No tool available for time queries"
@@ -121,18 +134,18 @@ def get_available_tools() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "control_volume",
-                "description": "Control system volume",
+                "description": "Control system volume. Use 'up'/'down' for RELATIVE changes (increase/decrease BY amount), use 'set' for ABSOLUTE levels (set TO amount).",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
                             "enum": ["up", "down", "set", "mute", "unmute"],
-                            "description": "The volume action to perform"
+                            "description": "The volume action: 'up' = increase BY amount, 'down' = decrease BY amount, 'set' = set TO absolute level, 'mute'/'unmute' = toggle mute"
                         },
                         "amount": {
                             "type": "integer",
-                            "description": "Amount to change volume (1-100 for up/down) or absolute volume level (0-100 for set)",
+                            "description": "For 'up'/'down': amount to change volume BY (1-100). For 'set': absolute volume level to set TO (0-100). Not used for mute/unmute.",
                             "minimum": 0,
                             "maximum": 100
                         }
