@@ -24,6 +24,8 @@ class WakeWordDetector:
         self.stream = None
         self.sensitivity = self.settings.audio_settings.wake_word_sensitivity
         self.sample_rate = self.settings.audio_settings.sample_rate
+
+        self.chunks_to_skip = 0
         
         if self.sample_rate != 16000:
             app_logger.warning(f"OpenWakeWord typically expects 16000 Hz, but configured sample rate is {self.sample_rate}. This might affect performance.")
@@ -189,12 +191,11 @@ class WakeWordDetector:
             )
             app_logger.info(f"Listening for wake word '{self.active_model}'...")
 
-            chunks_to_skip = 0
             while True:
                 audio_chunk = self.stream.read(self.chunk_size, exception_on_overflow=False)
                 
-                if chunks_to_skip > 0:
-                    chunks_to_skip -= 1
+                if self.chunks_to_skip > 0:
+                    self.chunks_to_skip -= 1
                     continue
                 
                 # Convert the audio bytes to the right format
@@ -213,10 +214,7 @@ class WakeWordDetector:
                     
                     # Add a longer cooldown period to prevent immediate re-triggering
                     # This gives time for any residual audio/echo to clear
-                    cooldown_time = 0.3
-                    app_logger.debug(f"Wake word cooldown period: {cooldown_time}s")
-                    time.sleep(cooldown_time)
-                    chunks_to_skip = 7
+                    self.chunks_to_skip = 10
                     
                     play_wake_word_accepted_sound()
                     
