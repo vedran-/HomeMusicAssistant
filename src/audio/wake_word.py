@@ -6,10 +6,13 @@ import numpy as np
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
 from src.utils.audio_effects import play_wake_word_accepted_sound
+from src.tts.piper_client import PiperTTSClient # Added for TTS control
+from typing import Optional # Ensure Optional is imported if not already
 
 class WakeWordDetector:
-    def __init__(self, settings: AppSettings):
+    def __init__(self, settings: AppSettings, tts_client: Optional[PiperTTSClient] = None):
         self.settings = settings
+        self.tts_client = tts_client
         
         # Limit to only supported wake word models - alexa first as default
         self.supported_models = ["alexa", "hey_jarvis"]
@@ -207,16 +210,29 @@ class WakeWordDetector:
                 # Get prediction for the active model
                 if self.active_model in prediction and prediction[self.active_model] > self.sensitivity:
                     app_logger.info(f"Wake word '{self.active_model}' detected with score {prediction[self.active_model]:.2f}!")
-                    self.stop_listening()
+
+                    # Stop any ongoing TTS playback
+                    if self.tts_client:
+                        # Check is_speaking with the lock if possible, or rely on its internal thread-safety
+                        # For simplicity here, direct check. PiperTTSClient's is_speaking is lock-protected for writes.
+                        if self.tts_client.is_speaking:
+                            app_logger.info("Wake word detected: Stopping ongoing TTS playback.")
+                            self.tts_client.stop_speaking()
+                            # Give a brief moment for TTS to actually stop if it involves async operations
+                            # This might not be strictly necessary if stop_speaking is blocking enough
+                            # or if the subsequent actions don't interfere.
+                            # time.sleep(0.1) # Optional small delay
+
+                    self.stop_listening() # Stop microphone listening first
                     
                     # Improved reset to prevent continuous detection
                     self._reset_model_state()
                     
                     # Add a longer cooldown period to prevent immediate re-triggering
                     # This gives time for any residual audio/echo to clear
-                    self.chunks_to_skip = 10
+                    self.chunks_to_skip = 20 # e.g., 20 * 80ms = 1600ms cooldown
                     
-                    play_wake_word_accepted_sound()
+                    play_wake_word_accepted_sound() # Play sound after stopping other things
                     
                     return True
 
@@ -275,7 +291,8 @@ if __name__ == '__main__':
              os.makedirs(settings.paths.openwakeword_models_dir, exist_ok=True)
              app_logger.info(f"Created openwakeword_models_dir at {settings.paths.openwakeword_models_dir}")
 
-        detector = WakeWordDetector(settings)
+        # For this test, we don't have a live TTS client, so pass None
+        detector = WakeWordDetector(settings, tts_client=None) 
         app_logger.info("WakeWordDetector initialized. Starting to listen...")
         
         if detector.listen():

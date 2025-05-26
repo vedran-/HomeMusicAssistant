@@ -9,6 +9,7 @@ import threading
 from pathlib import Path
 from typing import Optional
 
+from audioplayer import AudioPlayer
 from src.utils.logger import app_logger
 
 def play_sound_effect_async(sound_file_path: str, volume: float = 0.7) -> None:
@@ -17,7 +18,7 @@ def play_sound_effect_async(sound_file_path: str, volume: float = 0.7) -> None:
     
     Args:
         sound_file_path: Path to the sound file to play
-        volume: Volume level (0.0 to 1.0) - Note: playsound3 doesn't support volume control
+        volume: Volume level (0.0 to 1.0)
     """
     def _play_sound():
         try:
@@ -25,13 +26,21 @@ def play_sound_effect_async(sound_file_path: str, volume: float = 0.7) -> None:
                 app_logger.warning(f"Sound effect file not found: {sound_file_path}")
                 return
                 
-            # Use playsound3 for cross-platform audio playback
-            from playsound3 import playsound
-            playsound(sound_file_path, block=False)
-            app_logger.debug(f"Sound effect played: {sound_file_path}")
+            player = None
+            try:
+                player = AudioPlayer(sound_file_path)
+                # Convert volume from 0.0-1.0 to 0-100 for AudioPlayer
+                player_volume = int(max(0, min(100, volume * 100)))
+                player.volume = player_volume
+                app_logger.debug(f"Playing sound effect: {sound_file_path} at volume {player.volume} ({volume*100:.0f}%)")
+                player.play(block=True) # Block this thread until sound is done
+                app_logger.debug(f"Sound effect finished: {sound_file_path}")
+            finally:
+                if player:
+                    player.close()
                 
         except ImportError:
-            app_logger.warning("playsound3 not available - sound effects disabled")
+            app_logger.warning("audioplayer not available - sound effects disabled. Please install it.")
         except Exception as e:
             app_logger.error(f"Error playing sound effect: {e}")
     
