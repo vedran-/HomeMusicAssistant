@@ -123,7 +123,7 @@ class PiperTTSClient:
             
             app_logger.info(f"🗣️ Speaking: '{text}'")
             audio_file_path = tempfile.NamedTemporaryFile(suffix='.wav', delete=False).name
-            self._speak_text(text, audio_file_path, volume, speech_id)
+            self._speak_text(text, audio_file_path, volume, speech_id, interrupt_current)
             return True
             
         except Exception as e:
@@ -133,7 +133,7 @@ class PiperTTSClient:
             with self._speaking_lock:
                 self.is_speaking = False
     
-    def _speak_text(self, text: str, audio_file_path: str, volume: float = 1.0, speech_id: Optional[str] = None):
+    def _speak_text(self, text: str, audio_file_path: str, volume: float = 1.0, speech_id: Optional[str] = None, interrupt_current: bool = True):
         """Internal method to handle the actual text-to-speech conversion and playback."""
         try:
             # Use Piper CLI to generate audio
@@ -207,7 +207,7 @@ class PiperTTSClient:
                 except Exception as local_close_err:
                     app_logger.error(f"[TTS Speak ID: {speech_id}] Error closing local player instance: {local_close_err}")
     
-    def speak_async(self, text: str, interrupt_current: bool = True, volume: float = 1.0):
+    def speak_async(self, text: str, interrupt_current: bool = True, volume: float = 0.25):
         """Speaks the given text asynchronously without blocking."""
         speech_id = str(uuid.uuid4())
         app_logger.debug(f"[TTS Async ID: {speech_id}] Speak_async request. Text: '{text[:30]}...', Interrupt: {interrupt_current}, Volume: {volume}")
