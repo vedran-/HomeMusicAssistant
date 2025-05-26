@@ -200,7 +200,9 @@ The system will:
 The system includes several built-in tools for system control:
 
 ### Music Controller
-The Music Controller provides comprehensive YouTube Music control via voice commands. It supports playback control, music search, time navigation, and volume management.
+The Music Controller provides comprehensive YouTube Music control via voice commands, utilizing the [unofficial YouTube Music desktop app](https://github.com/th-ch/youtube-music). It supports playback control, music search, time navigation, and volume management.
+
+**Important:** To use this feature, you must have the YouTube Music (unofficial) desktop application installed and running. Additionally, you need to enable the **`API Server [Beta]`** plugin within the desktop app's settings (usually found under `Plugins` or `Settings -> Plugins`). This allows HomeMusicAssistant to communicate with and control the YouTube Music app.
 
 **Documentation**: See [MUSIC_CONTROLLER.md](MUSIC_CONTROLLER.md) for complete command reference and usage examples.
 
