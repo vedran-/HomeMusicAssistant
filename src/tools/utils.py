@@ -3,7 +3,89 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
 
+# Windows volume control imports
+try:
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+    import pythoncom
+    PYCAW_AVAILABLE = True
+except ImportError:
+    PYCAW_AVAILABLE = False
+
 util_logger = logging.getLogger(__name__)
+
+def GetSystemVolume() -> Optional[int]:
+    """
+    Get the current system volume percentage using pycaw (Windows).
+    
+    Returns:
+        Current volume percentage (0-100) or None if failed
+    """
+    if not PYCAW_AVAILABLE:
+        util_logger.error("pycaw library not available. Install with: pip install pycaw comtypes")
+        return None
+        
+    try:
+        pythoncom.CoInitialize()
+        devices = AudioUtilities.GetSpeakers()
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        volume = interface.QueryInterface(IAudioEndpointVolume)
+        volume_scalar = volume.GetMasterVolumeLevelScalar()
+        volume_percentage = int(round(volume_scalar * 100))
+        
+        util_logger.debug(f"Current system volume: {volume_percentage}%")
+        return volume_percentage
+        
+    except Exception as e:
+        util_logger.error(f"Failed to get system volume: {e}")
+        return None
+    finally:
+        try:
+            pythoncom.CoUninitialize()
+        except:
+            pass
+
+def SetSystemVolume(percentage: Union[int, float]) -> bool:
+    """
+    Set the system volume to a specific percentage using pycaw (Windows).
+    
+    Args:
+        percentage: Volume percentage (0-100)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    if not PYCAW_AVAILABLE:
+        util_logger.error("pycaw library not available. Install with: pip install pycaw comtypes")
+        return False
+        
+    try:
+        # Convert to float and validate range
+        volume_percent = float(percentage)
+        if volume_percent < 0 or volume_percent > 100:
+            util_logger.error(f"Invalid volume percentage: {volume_percent}. Must be 0-100.")
+            return False
+        
+        pythoncom.CoInitialize()
+        devices = AudioUtilities.GetSpeakers()
+        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+        volume = interface.QueryInterface(IAudioEndpointVolume)
+        
+        # Convert percentage to scalar (0.0 - 1.0)
+        volume_scalar = volume_percent / 100.0
+        volume.SetMasterVolumeLevelScalar(volume_scalar, None)
+        
+        util_logger.debug(f"System volume set to {volume_percent}%")
+        return True
+        
+    except Exception as e:
+        util_logger.error(f"Failed to set system volume: {e}")
+        return False
+    finally:
+        try:
+            pythoncom.CoUninitialize()
+        except:
+            pass
 
 def run_ahk_script(
     script_path: Union[str, Path],

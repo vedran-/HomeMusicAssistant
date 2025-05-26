@@ -339,6 +339,29 @@ class ToolRegistry:
             "feedback": f"I'm sorry, I can't help with that. {reason}"
         }
 
+    def get_system_volume(self) -> Optional[int]:
+        """
+        Get the current system volume percentage using pycaw.
+        
+        Returns:
+            Current volume percentage (0-100) or None if failed
+        """
+        from .utils import GetSystemVolume
+        return GetSystemVolume()
+
+    def set_system_volume(self, percentage: Union[int, float]) -> bool:
+        """
+        Set the system volume to a specific percentage using pycaw.
+        
+        Args:
+            percentage: Volume percentage (0-100)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        from .utils import SetSystemVolume
+        return SetSystemVolume(percentage)
+
     def _run_autohotkey_script(self, script_path: Path, args: List[str]) -> Dict[str, Any]:
         """
         Run an AutoHotkey script using the utility function.

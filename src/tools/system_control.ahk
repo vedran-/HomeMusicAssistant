@@ -124,8 +124,8 @@ GetVolume() {
     currentVolume := SoundGetVolume()
     volumeValue := Round(currentVolume)
     
-    ; Use cmd echo for simple, reliable output
-    RunWait('cmd /c echo ' . volumeValue, , "")
+    ; Use Echo function to output volume (writes to both log and stdout)
+    Echo(volumeValue)
 }
 
 ; Adjust system volume by relative percentage
@@ -181,14 +181,18 @@ SetAbsoluteVolume(percentage) {
     }
 }
 
-; Echo message to stdout
+; Echo message to both log file and stdout
 Echo(message) {
+    ; Write to log file for debugging
+    logFilePath := A_ScriptDir . "\system_control_log.txt"
+    FileAppend(FormatTime(,"HH:mm:ss") . " | " . message . "`n", logFilePath)
+    
+    ; Also output to stdout using cmd (for Python to capture)
     try {
-        ; Try direct FileAppend to stdout
-        FileAppend(message . "`n", "*")
-    } catch {
-        ; Use cmd to echo the message directly to console
         RunWait('cmd /c echo ' . message, , "")
+    } catch {
+        ; Fallback to FileAppend if cmd fails
+        FileAppend(message . "`n", "*")
     }
 }
 

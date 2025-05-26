@@ -11,6 +11,8 @@ from src.transcription.groq_client import GroqTranscriber
 from src.llm.client import LiteLLMClient
 from src.llm.prompts import get_system_prompt, get_available_tools
 from src.tools.registry import ToolRegistry
+from src.utils import GetSystemVolume, SetSystemVolume
+
 
 def initialize_components(settings: AppSettings):
     """Initialize all components required for the voice assistant."""
@@ -97,13 +99,19 @@ def run_voice_assistant(settings: AppSettings):
                 continue
                 
             app_logger.info("🎯 Wake word detected! Listening for command...")
-            
+
+            system_volume = GetSystemVolume()
+            app_logger.info(f"🔊 System volume: {system_volume}%")
+            SetSystemVolume(system_volume/3)
+
             # Wake word detected, start capturing audio
             audio_file = audio_capturer.capture_audio_after_wake()
             if not audio_file:
                 app_logger.error("Audio capture failed. Returning to wake word detection.")
                 continue
-                
+
+            SetSystemVolume(system_volume)
+
             # Transcribe captured audio
             transcript = transcriber.transcribe_audio(audio_file)
             if not transcript:
