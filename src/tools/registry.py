@@ -13,6 +13,7 @@ import os
 import json
 from typing import Dict, Any, Optional, List, Tuple, Union
 from pathlib import Path
+from datetime import datetime
 
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
@@ -77,6 +78,8 @@ class ToolRegistry:
                 return self._execute_system_control(parameters)
             elif tool_name == "unknown_request":
                 return self._handle_unknown_request(parameters)
+            elif tool_name == "get_time":
+                return self._execute_get_time(parameters)
             else:
                 app_logger.error(f"Unknown tool name: {tool_name}")
                 return {
@@ -338,6 +341,47 @@ class ToolRegistry:
             "output": reason,
             "feedback": f"I'm sorry, I can't help with that. {reason}"
         }
+
+    def _execute_get_time(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute get_time tool to return current system time and optionally date."""
+        include_date = parameters.get("include_date", False)
+        time_format = parameters.get("format", "auto")
+        
+        try:
+            now = datetime.now()
+            
+            # Determine time format
+            if time_format == "12hour":
+                time_str = now.strftime('%I:%M:%S %p')
+            elif time_format == "24hour":
+                time_str = now.strftime('%H:%M:%S')
+            else:  # auto - use system default (12-hour for most Windows systems)
+                time_str = now.strftime('%I:%M:%S %p')
+            
+            # Add date if requested
+            if include_date:
+                date_str = now.strftime('%A, %B %d, %Y')
+                output = f"{date_str} at {time_str}"
+                feedback = f"Today is {date_str} and the current time is {time_str}"
+            else:
+                output = time_str
+                feedback = f"The current time is {time_str}"
+            
+            app_logger.info(f"Time request - include_date: {include_date}, format: {time_format}, result: {output}")
+            
+            return {
+                "success": True,
+                "output": output,
+                "feedback": feedback
+            }
+            
+        except Exception as e:
+            app_logger.error(f"Failed to get current time: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "feedback": "Sorry, I couldn't get the current time"
+            }
 
     def _run_autohotkey_script(self, script_path: Path, args: List[str]) -> Dict[str, Any]:
         """

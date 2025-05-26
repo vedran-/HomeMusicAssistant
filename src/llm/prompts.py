@@ -16,16 +16,22 @@ If you cannot determine which tool to call, or if the user's request doesn't mat
 call the 'unknown_request' tool with a brief explanation.
 
 CRITICAL RULE FOR VOLUME CONTROL:
+- STRONGLY PREFER RELATIVE CHANGES: Almost all volume requests should use action="up" or "down"
 - For RELATIVE changes (increase/decrease BY X): use action="up" or "down" with amount=X
-- For ABSOLUTE settings (set TO X): use action="set" with amount=X
-- Pay attention to keywords: "by", "increase by", "decrease by", "up by" = relative change
-- Pay attention to keywords: "to", "set to", "volume to" = absolute setting
+- For ABSOLUTE settings (set TO X): use action="set" with amount=X ONLY when explicitly requested
+- Pay attention to keywords: "by", "increase by", "decrease by", "up by", "down by" = relative change
+- Mathematical expressions: "half", "double", "quarter" = relative change (50%, 100%, 25%)
+- Pay attention to keywords: "to", "set to", "volume to", "make it exactly" = absolute setting
+- DEFAULT TO RELATIVE: When in doubt, use "up" or "down" rather than "set"
 
 CRITICAL RULE FOR MUSIC: 
 Whenever the user says "play" followed by a search query, always use the play_music tool with action="play" and the search_term.
 If the user explicitly mentions "radio" (e.g., "play Pink Floyd radio"), set play_type="radio".
 Otherwise, for general play requests (e.g., "play Pink Floyd"), use play_type="default" or omit it.
 Do NOT use unknown_request for play commands - the music system can search for anything.
+
+CRITICAL RULE FOR TIME:
+When the user asks for the current time, date, or "what time is it", use the get_time tool.
 
 Examples:
 - If user says "play some music" → call play_music with action="play" (play_type can be omitted or "default")
@@ -51,11 +57,20 @@ Examples:
 - If user says "turn down the volume" → call control_volume with action="down"
 - If user says "decrease volume by 25" → call control_volume with action="down", amount=25
 - If user says "lower volume by 10%" → call control_volume with action="down", amount=10
-- If user says "set volume to 50" → call control_volume with action="set", amount=50
-- If user says "volume to 75%" → call control_volume with action="set", amount=75
+- If user says "decrease the volume on half" → call control_volume with action="down", amount=50
+- If user says "cut the volume in half" → call control_volume with action="down", amount=50
+- If user says "make it half as loud" → call control_volume with action="down", amount=50
+- If user says "double the volume" → call control_volume with action="up", amount=100
+- If user says "quarter the volume" → call control_volume with action="down", amount=75
+- If user says "reduce volume to half" → call control_volume with action="down", amount=50
+- If user says "set volume to exactly 50" → call control_volume with action="set", amount=50
+- If user says "make volume exactly 75%" → call control_volume with action="set", amount=75
 - If user says "put the computer to sleep" → call system_control with action="sleep"
 - If user says "restart the computer" → call system_control with action="restart"
-- If user says "what time is it" → call unknown_request with reason="No tool available for time queries"
+- If user says "what time is it" → call get_time
+- If user says "what's the current time" → call get_time
+- If user says "tell me the time" → call get_time
+- If user says "what's today's date" → call get_time with include_date=true
 """
 
 def get_available_tools() -> List[Dict[str, Any]]:
@@ -134,7 +149,7 @@ def get_available_tools() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "control_volume",
-                "description": "Control system volume. Use 'up'/'down' for RELATIVE changes (increase/decrease BY amount), use 'set' for ABSOLUTE levels (set TO amount).",
+                "description": "Control system volume. PREFER 'up'/'down' for RELATIVE changes (increase/decrease BY amount). Use 'set' for ABSOLUTE levels ONLY when explicitly requested with words like 'exactly', 'set to', etc.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -169,6 +184,30 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         }
                     },
                     "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_time",
+                "description": "Get the current system time and optionally the date. Use this when user asks for time, current time, or date.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "include_date": {
+                            "type": "boolean",
+                            "description": "Whether to include the current date along with time. Default: false (time only).",
+                            "default": False
+                        },
+                        "format": {
+                            "type": "string",
+                            "enum": ["12hour", "24hour", "auto"],
+                            "description": "Time format preference. 'auto' uses system default. Default: 'auto'.",
+                            "default": "auto"
+                        }
+                    },
+                    "required": []
                 }
             }
         },

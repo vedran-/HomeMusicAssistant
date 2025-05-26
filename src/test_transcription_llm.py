@@ -53,7 +53,7 @@ class TranscriptionLLMTester:
             "turn up the volume",
             "turn down the volume by 20",
             "put the computer to sleep",
-            "what time is it",  # Should trigger unknown_request
+            "what time is it",  # Should trigger get_time
             "hello how are you"  # Should trigger unknown_request
         ]
 
