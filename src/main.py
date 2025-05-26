@@ -11,7 +11,7 @@ from src.transcription.groq_client import GroqTranscriber
 from src.llm.client import LiteLLMClient
 from src.llm.prompts import get_system_prompt, get_available_tools
 from src.tools.registry import ToolRegistry
-from src.tools.utils import GetSystemVolume, SetSystemVolume, SetSystemVolumeGradual, CancelVolumeTransition
+from src.tools.utils import GetSystemVolume, SetSystemVolume
 
 
 def initialize_components(settings: AppSettings):
@@ -104,18 +104,18 @@ def run_voice_assistant(settings: AppSettings):
             app_logger.info(f"🔊 System volume: {system_volume}%")
             
             # Gradually lower volume for better wake word detection
-            SetSystemVolumeGradual(system_volume/3, duration=1, steps=10)
+            SetSystemVolume(system_volume/3, duration=1.0, steps=10)
 
             # Wake word detected, start capturing audio
             audio_file = audio_capturer.capture_audio_after_wake()
             if not audio_file:
                 app_logger.error("Audio capture failed. Returning to wake word detection.")
                 # Restore volume even if audio capture failed
-                SetSystemVolumeGradual(system_volume, duration=1.0, steps=15)
+                SetSystemVolume(system_volume, duration=1.0, steps=15)
                 continue
 
             # Gradually restore volume after audio capture
-            SetSystemVolumeGradual(system_volume, duration=1.0, steps=15)
+            SetSystemVolume(system_volume, duration=1.0, steps=15)
 
             # Transcribe captured audio
             transcript = transcriber.transcribe_audio(audio_file)

@@ -17,16 +17,11 @@ SetSystemVolume(percentage, duration=None, steps=20)
 - `duration`: Optional transition duration in seconds. If `None` or `<= 0`, changes volume instantly
 - `steps`: Number of intermediate steps for smooth transition (default: 20)
 
-### New Convenience Functions
-```python
-SetSystemVolumeGradual(percentage, duration=2.0, steps=20)
-```
-A dedicated function for gradual volume changes with sensible defaults.
-
-```python
-CancelVolumeTransition()
-```
-Cancel any active volume transition immediately.
+### Automatic Thread Management
+The enhanced `SetSystemVolume` function automatically handles:
+- Thread cancellation when starting new transitions
+- Volume state management
+- Graceful handling of concurrent requests
 
 ## Usage Examples
 
@@ -40,11 +35,11 @@ SetSystemVolume(50)  # Instant change to 50%
 # Gradually change to 80% over 3 seconds
 SetSystemVolume(80, duration=3.0, steps=30)
 
-# Using the convenience function
-SetSystemVolumeGradual(60, duration=2.0)
+# Quick transition with default steps
+SetSystemVolume(60, duration=2.0)
 
-# Cancel any active transition
-CancelVolumeTransition()
+# Starting a new transition automatically cancels any previous one
+SetSystemVolume(50, duration=1.0)  # This cancels the previous transition
 ```
 
 ## Implementation Details
@@ -77,10 +72,10 @@ The main voice control loop now uses gradual transitions:
 
 ```python
 # Before audio capture - quickly lower volume
-SetSystemVolumeGradual(system_volume/3, duration=0.5, steps=10)
+SetSystemVolume(system_volume/3, duration=1.0, steps=10)
 
 # After audio capture - smoothly restore volume  
-SetSystemVolumeGradual(system_volume, duration=1.0, steps=15)
+SetSystemVolume(system_volume, duration=1.0, steps=15)
 ```
 
 ## Testing
@@ -94,7 +89,7 @@ The test demonstrates:
 - Instant vs gradual volume changes
 - Different durations and step counts
 - Edge cases (zero duration, negative duration)
-- Thread cancellation functionality
+- Automatic thread cancellation when starting new transitions
 - Volume restoration
 
 ## Benefits
@@ -104,6 +99,8 @@ The test demonstrates:
 3. **Configurable**: Adjustable duration and smoothness
 4. **Backward Compatible**: Existing code continues to work unchanged
 5. **Thread Safe**: Proper COM handling for Windows audio APIs
+6. **Simplified API**: Single function handles both instant and gradual changes
+7. **Automatic Management**: No need to manually cancel transitions
 
 ## Technical Notes
 

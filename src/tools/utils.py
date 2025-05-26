@@ -198,9 +198,9 @@ def _gradual_volume_change(target_percentage: float, duration: float, steps: int
     except Exception as e:
         util_logger.error(f"Error during gradual volume change: {e}", exc_info=True)
 
-def SetSystemVolumeGradual(percentage: Union[int, float], duration: float = 2.0, steps: int = 20) -> bool:
+def _SetSystemVolumeGradual(percentage: Union[int, float], duration: float = 2.0, steps: int = 20) -> bool:
     """
-    Convenience function to set system volume with gradual transition.
+    Internal convenience function to set system volume with gradual transition.
     
     Args:
         percentage: Target volume percentage (0-100)
@@ -212,9 +212,9 @@ def SetSystemVolumeGradual(percentage: Union[int, float], duration: float = 2.0,
     """
     return SetSystemVolume(percentage, duration=duration, steps=steps)
 
-def CancelVolumeTransition() -> bool:
+def _CancelVolumeTransition() -> bool:
     """
-    Cancel any active volume transition.
+    Internal function to cancel any active volume transition.
     
     Returns:
         True if a transition was cancelled, False if no transition was active

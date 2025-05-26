@@ -11,7 +11,7 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from tools.utils import GetSystemVolume, SetSystemVolume, SetSystemVolumeGradual, CancelVolumeTransition
+from tools.utils import GetSystemVolume, SetSystemVolume
 from utils.logger import app_logger, configure_logging
 
 def test_gradual_volume():
@@ -36,17 +36,17 @@ def test_gradual_volume():
     
     # Test 2: Gradual volume change to 80% over 3 seconds
     app_logger.info("\n🌊 Test 2: Gradual volume change to 80% over 3 seconds")
-    SetSystemVolumeGradual(80, duration=3.0, steps=30)
+    SetSystemVolume(80, duration=3.0, steps=30)
     time.sleep(4)  # Wait for completion
     
     # Test 3: Gradual volume change to 20% over 2 seconds
     app_logger.info("\n🌊 Test 3: Gradual volume change to 20% over 2 seconds")
-    SetSystemVolumeGradual(20, duration=2.0, steps=20)
+    SetSystemVolume(20, duration=2.0, steps=20)
     time.sleep(3)  # Wait for completion
     
     # Test 4: Quick gradual change to 60% over 1 second
     app_logger.info("\n⚡ Test 4: Quick gradual change to 60% over 1 second")
-    SetSystemVolumeGradual(60, duration=1.0, steps=10)
+    SetSystemVolume(60, duration=1.0, steps=10)
     time.sleep(2)  # Wait for completion
     
     # Test 5: Using SetSystemVolume with duration parameter
@@ -56,7 +56,7 @@ def test_gradual_volume():
     
     # Restore original volume gradually
     app_logger.info(f"\n🔄 Restoring original volume ({current_volume}%) gradually over 2 seconds")
-    SetSystemVolumeGradual(current_volume, duration=2.0, steps=20)
+    SetSystemVolume(current_volume, duration=2.0, steps=20)
     time.sleep(3)  # Wait for completion
     
     final_volume = GetSystemVolume()
@@ -84,24 +84,24 @@ def test_edge_cases():
     
     # Test with very small steps
     app_logger.info("Test: Very small steps (2 steps)")
-    SetSystemVolumeGradual(70, duration=1.0, steps=2)
+    SetSystemVolume(70, duration=1.0, steps=2)
     time.sleep(2)
     
     # Test with many steps
     app_logger.info("Test: Many steps (50 steps)")
-    SetSystemVolumeGradual(30, duration=2.0, steps=50)
+    SetSystemVolume(30, duration=2.0, steps=50)
     time.sleep(3)
     
-    # Test cancellation
-    app_logger.info("Test: Cancellation (start long transition, then cancel)")
-    SetSystemVolumeGradual(90, duration=5.0, steps=50)
+    # Test automatic cancellation (start long transition, then start new one)
+    app_logger.info("Test: Automatic cancellation (start long transition, then start new one)")
+    SetSystemVolume(90, duration=5.0, steps=50)
     time.sleep(1)  # Let it start
-    cancelled = CancelVolumeTransition()
-    app_logger.info(f"Cancellation result: {cancelled}")
-    time.sleep(1)
+    app_logger.info("Starting new transition - should automatically cancel previous one")
+    SetSystemVolume(40, duration=1.0, steps=10)
+    time.sleep(2)
     
     # Restore original volume
-    SetSystemVolumeGradual(current_volume, duration=1.0)
+    SetSystemVolume(current_volume, duration=1.0)
     time.sleep(2)
     
     app_logger.info("✅ Edge case testing completed!")
