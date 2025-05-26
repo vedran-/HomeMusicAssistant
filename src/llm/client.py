@@ -82,8 +82,12 @@ class LiteLLMClient:
                 text_response = first_choice.message.content if hasattr(first_choice, 'message') and hasattr(first_choice.message, 'content') else None
                 app_logger.info(f"LLM provided a text response without tool call: '{text_response}'")
                 
-                # For MVP, we'll return None if no tool was called, as we're focusing on tool execution
-                # In a more advanced version, this text could be sent to TTS
+                # Return text response for TTS - this allows the assistant to speak responses
+                if text_response:
+                    return {
+                        "tool_name": "speak_response",
+                        "parameters": {"text": text_response}
+                    }
                 return None
                 
         except Exception as e:

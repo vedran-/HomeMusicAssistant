@@ -113,7 +113,8 @@ class YouTubeMusicAPIController:
             API response
         """
         result = {"success": True}
-        
+
+        count = count + 1
         # Make multiple previous requests if count > 1
         for _ in range(count):
             current_result = self._make_request("POST", "previous")

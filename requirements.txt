@@ -5,4 +5,7 @@ pydantic
 python-dotenv
 loguru
 groq
-playsound3 
+playsound3
+pycaw
+comtypes
+numpy 

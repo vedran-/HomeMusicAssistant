@@ -12,6 +12,7 @@ from src.llm.client import LiteLLMClient
 from src.llm.prompts import get_system_prompt, get_available_tools
 from src.tools.registry import ToolRegistry
 from src.tools.utils import GetSystemVolume, SetSystemVolume
+from src.tts.piper_client import PiperTTSClient
 
 
 def initialize_components(settings: AppSettings):
@@ -27,6 +28,7 @@ def initialize_components(settings: AppSettings):
     transcriber = GroqTranscriber(settings)
     llm_client = LiteLLMClient(settings)
     tool_registry = ToolRegistry(settings)
+    tts_client = PiperTTSClient(settings)
     
     # Log available microphones for user reference
     audio_capturer.list_available_microphones()
@@ -41,16 +43,53 @@ def initialize_components(settings: AppSettings):
     available_scripts = tool_registry.list_available_scripts()
     app_logger.info(f"Available AutoHotkey scripts: {available_scripts}")
     
-    return wake_detector, audio_capturer, transcriber, llm_client, tool_registry
+    # Test TTS initialization
+    if tts_client.is_available():
+        app_logger.info("✅ TTS (Piper) initialized successfully")
+        voice_info = tts_client.get_voice_info()
+        app_logger.info(f"Voice model: {voice_info.get('model', 'Unknown')}")
+    else:
+        app_logger.warning("⚠️ TTS (Piper) initialization failed or disabled")
+    
+    return wake_detector, audio_capturer, transcriber, llm_client, tool_registry, tts_client
 
-def execute_tool_call(tool_registry: ToolRegistry, tool_call: Dict[str, Any]):
+def execute_tool_call(tool_registry: ToolRegistry, tts_client: PiperTTSClient, tool_call: Dict[str, Any]):
     """Execute a tool call and provide user feedback."""
     try:
+        tool_name = tool_call.get("tool_name")
+        parameters = tool_call.get("parameters", {})
+        
+        # Handle special TTS tool for speaking responses
+        if tool_name == "speak_response":
+            text_to_speak = parameters.get("text", "")
+            if text_to_speak and tts_client.is_available():
+                app_logger.info(f"🗣️ Assistant response: '{text_to_speak}'")
+                tts_client.speak_async(text_to_speak)
+                return {
+                    "success": True,
+                    "feedback": "Response spoken",
+                    "output": text_to_speak
+                }
+            else:
+                app_logger.info(f"📝 Assistant response: '{text_to_speak}'")
+                return {
+                    "success": True,
+                    "feedback": "Response provided (TTS unavailable)",
+                    "output": text_to_speak
+                }
+        
+        # Execute regular tool calls
         result = tool_registry.execute_tool_call(tool_call)
         
         # Log the result
         if result["success"]:
             app_logger.info(f"✅ {result['feedback']}")
+            
+            # Speak tool feedback if TTS is enabled
+            if tts_client.is_available() and tts_client.tts_settings.speak_responses:
+                feedback_text = result.get('feedback', '')
+                if feedback_text and len(feedback_text) < 200:  # Don't speak very long feedback
+                    tts_client.speak_async(feedback_text, interrupt_current=False)
             
             # Make tool output more prominent in console/log
             if result.get("output"):
@@ -63,23 +102,34 @@ def execute_tool_call(tool_registry: ToolRegistry, tool_call: Dict[str, Any]):
             app_logger.error(f"❌ Tool execution failed: {result['feedback']}")
             if result.get("error"):
                 app_logger.error(f"Error details: {result['error']}")
+            
+            # Speak error feedback if TTS is enabled
+            if tts_client.is_available() and tts_client.tts_settings.speak_responses:
+                error_text = f"Sorry, {result.get('feedback', 'command failed')}"
+                tts_client.speak_async(error_text, interrupt_current=False)
                 
         return result
         
     except Exception as e:
         app_logger.error(f"Exception during tool execution: {e}", exc_info=True)
-        return {
+        error_result = {
             "success": False,
             "error": str(e),
             "feedback": f"Tool execution failed: {str(e)}"
         }
+        
+        # Speak error if TTS is available
+        if tts_client.is_available() and tts_client.tts_settings.speak_responses:
+            tts_client.speak_async("Sorry, there was an error executing that command", interrupt_current=False)
+        
+        return error_result
 
 def run_voice_assistant(settings: AppSettings):
     """Main loop for the voice assistant."""
     app_logger.info("Starting Home Assistant voice control system...")
     
     # Initialize components
-    wake_detector, audio_capturer, transcriber, llm_client, tool_registry = initialize_components(settings)
+    wake_detector, audio_capturer, transcriber, llm_client, tool_registry, tts_client = initialize_components(settings)
     
     # Get the system prompt and available tools for the LLM
     system_prompt = get_system_prompt()
@@ -136,7 +186,7 @@ def run_voice_assistant(settings: AppSettings):
                 app_logger.info(f"🧠 LLM decision: {tool_name} with parameters: {parameters}")
                 
                 # Execute the tool call
-                execution_result = execute_tool_call(tool_registry, tool_call)
+                execution_result = execute_tool_call(tool_registry, tts_client, tool_call)
                 
                 # Provide additional feedback based on the tool
                 if execution_result["success"]:

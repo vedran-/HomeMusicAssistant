@@ -29,5 +29,13 @@
   "logging": {
     "level": "INFO",
     "format": "{time} | {level} | {message}"
+  },
+  "tts_settings": {
+    "enabled": true,
+    "voice_model": "en_US-amy-medium",
+    "use_cuda": true,
+    "models_dir": "./models/piper",
+    "sample_rate": 22050,
+    "speak_responses": true
   }
 }

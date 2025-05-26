@@ -40,6 +40,18 @@ class LoggingSettings(BaseModel):
     level: str = Field(default="INFO")
     format: str = Field(default="{time} | {level} | {message}")
 
+class TTSSettings(BaseModel):
+    enabled: bool = Field(default=True, description="Enable text-to-speech functionality")
+    voice_model: str = Field(default="en_US-amy-medium", description="Piper voice model to use")
+    use_cuda: bool = Field(default=True, description="Use CUDA for GPU acceleration")
+    models_dir: DirectoryPath = Field(default="./models/piper", description="Directory to store Piper voice models")
+    sample_rate: int = Field(default=22050, description="Audio sample rate for TTS output")
+    speak_responses: bool = Field(default=True, description="Speak LLM responses and tool feedback")
+
+    @validator('models_dir', pre=True, always=True)
+    def resolve_models_dir(cls, v):
+        return os.path.abspath(v)
+
 class AppSettings(BaseModel):
     groq_api_key: str
     litellm_settings: LiteLLMSettings = Field(default_factory=LiteLLMSettings)
@@ -48,6 +60,7 @@ class AppSettings(BaseModel):
     paths: PathsSettings
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     youtube_music_api: YouTubeMusicAPISettings = Field(default_factory=YouTubeMusicAPISettings)
+    tts_settings: TTSSettings = Field(default_factory=TTSSettings)
 
 def load_settings(config_path: str = "config.json") -> AppSettings:
     # Try to load GROQ_API_KEY from environment first
@@ -88,6 +101,15 @@ def load_settings(config_path: str = "config.json") -> AppSettings:
             os.makedirs(abs_path, exist_ok=True)
             print(f"Created directory: {abs_path}")
         config_data['paths'][key] = abs_path # Ensure paths in config_data are absolute before Pydantic validation
+
+    # Create TTS models directory if it doesn't exist
+    tts_settings_data = config_data.get('tts_settings', {})
+    if 'models_dir' in tts_settings_data:
+        tts_models_dir = os.path.abspath(tts_settings_data['models_dir'])
+        if not os.path.exists(tts_models_dir):
+            os.makedirs(tts_models_dir, exist_ok=True)
+            print(f"Created TTS models directory: {tts_models_dir}")
+        config_data['tts_settings']['models_dir'] = tts_models_dir
 
     return AppSettings(**config_data)
 
