@@ -4,3 +4,4 @@ __pycache__
 *.pyc
 config - Copy.json
 /src/tools/youtube_music_play_log.txt
+/tools/piper

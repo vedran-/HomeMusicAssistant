@@ -45,19 +45,23 @@ ExecutePlaybackActionUIA(cUIA, command) {
     radio_button := ""
     shuffle_button := ""
     play_button := ""
+    found_like_button := false
 
     For button in allButtons {
         if (radio_button = "" && button.Name = "Radio") {
             radio_button := button
             Echo("Found 'Radio' button.")
         }
-        if (shuffle_button = "" && button.Name = "Shuffle") {
+        if (!found_like_button && shuffle_button = "" && button.Name = "Shuffle") {
             shuffle_button := button
             Echo("Found 'Shuffle' button.")
         }
         if (play_button = "" && StrLen(button.Name) > 5 && SubStr(button.Name, 1, 5) = "Play ") {
             play_button := button
             Echo("Found 'Play...' button: " . button.Name)
+        }
+        if (button.Name = "Like") {
+            found_like_button := true
         }
     }
 

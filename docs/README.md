@@ -7,6 +7,7 @@ This document provides detailed instructions for setting up, configuring, and te
 The Home Assistant voice control system is designed to run on a local machine and provide voice-controlled functionality for:
 - Music playback and volume control
 - System operations like sending the machine to sleep
+- Voice responses and feedback using text-to-speech
 - Other configurable actions
 
 ### Technology Stack
@@ -14,6 +15,7 @@ The Home Assistant voice control system is designed to run on a local machine an
 - **Wake Word Detection**: OpenWakeWord with "hey jarvis" and "alexa" wake words
 - **Speech-to-Text**: Whisper-large-v3 on Groq Cloud
 - **Natural Language Processing**: LLM via LiteLLM
+- **Text-to-Speech**: Piper TTS for voice responses
 - **Tools**: AutoHotkey v2 with UIAutomation v2 for system control
 
 ## Installation
@@ -21,9 +23,10 @@ The Home Assistant voice control system is designed to run on a local machine an
 ### Prerequisites
 
 - Python 3.8 or higher
-- Working microphone
+- Working microphone and speakers/headphones
 - Internet connection for cloud services (Groq, LiteLLM)
 - AutoHotkey v2 (for tool execution)
+- Piper TTS executable (for voice responses)
 
 ### Setup
 
@@ -40,13 +43,37 @@ cd HomeAssistant
 pip install -r requirements.txt
 ```
 
-3. Create a configuration file by copying the template:
+3. Install Piper TTS executable:
+
+Download the Piper TTS executable from the [official releases page](https://github.com/rhasspy/piper/releases/tag/2023.11.14-2):
+
+- Download the appropriate release for your platform (Windows, Linux, or macOS)
+- Extract the contents to `tools/piper/` directory in your project
+- Ensure the executable is named `piper.exe` (Windows) or `piper` (Linux/macOS)
+- The directory structure should look like:
+  ```
+  tools/
+  └── piper/
+      ├── piper.exe (or piper on Linux/macOS)
+      ├── espeak-ng.dll
+      ├── onnxruntime.dll
+      └── other supporting files...
+  ```
+
+4. Download voice models:
+
+Download the voice model files for text-to-speech:
+- Download `en_US-amy-medium.onnx` from: https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/medium/en_US-amy-medium.onnx
+- Download `en_US-amy-medium.onnx.json` from: https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/amy/medium/en_US-amy-medium.onnx.json
+- Place both files in `models/piper/` directory
+
+5. Create a configuration file by copying the template:
 
 ```bash
 cp config.template.json config.json
 ```
 
-4. Edit the `config.json` file to include your API keys and preferences (see Configuration section below)
+6. Edit the `config.json` file to include your API keys and preferences (see Configuration section below)
 
 ## Configuration
 
@@ -60,6 +87,14 @@ The system uses a `config.json` file based on `config.template.json`. Key config
 - **whisper_instructions**: Custom instructions to improve transcription accuracy for voice commands
 - **language**: Optional language code for Whisper (e.g., 'en', 'es', 'fr')  
 - **temperature**: Sampling temperature for Whisper (0.0 = deterministic)
+
+### TTS (Text-to-Speech) Settings
+- **enabled**: Enable/disable voice responses (default: true)
+- **voice_model**: Voice model to use (default: "en_US-amy-medium")
+- **models_dir**: Directory containing voice model files (default: "models/piper")
+- **sample_rate**: Audio sample rate for TTS (default: 22050)
+- **use_cuda**: Enable CUDA acceleration if available (default: true)
+- **speak_responses**: Whether to speak LLM responses and tool feedback (default: true)
 
 ### Audio Settings
 
@@ -103,6 +138,14 @@ Edit the `config.json` file to configure the following:
     "wake_word_sensitivity": 0.5,
     "silence_threshold": 500,
     "silence_duration": 1.5
+  },
+  "tts_settings": {
+    "enabled": true,
+    "voice_model": "en_US-amy-medium",
+    "models_dir": "models/piper",
+    "sample_rate": 22050,
+    "use_cuda": true,
+    "speak_responses": true
   },
   "api_keys": {
     "groq": "YOUR_GROQ_API_KEY",
@@ -150,6 +193,7 @@ The system will:
 3. Transcribe the speech
 4. Process the transcription with an LLM
 5. Execute the appropriate tool based on your request
+6. Provide voice feedback and responses using text-to-speech
 
 ## Available Tools
 
@@ -219,6 +263,20 @@ Test the transcription service with an existing audio file:
 python -c "from src.config.settings import load_settings; from src.transcription.groq_client import GroqTranscriber; settings = load_settings(); transcriber = GroqTranscriber(settings); transcript = transcriber.transcribe_audio('path/to/audio.wav'); print(f'Transcript: {transcript}')"
 ```
 
+#### Text-to-Speech (TTS)
+
+Test the TTS system:
+
+```bash
+python src/test_tts.py
+```
+
+Or test TTS programmatically:
+
+```bash
+python -c "from src.config.settings import load_settings; from src.tts.piper_client import PiperTTSClient; settings = load_settings(); tts = PiperTTSClient(settings); tts.speak('Hello! This is a test of the text to speech system.')"
+```
+
 ### Selecting a Microphone
 
 You have two ways to select a microphone:
@@ -272,12 +330,21 @@ If you encounter issues:
    - Verify your LiteLLM API key is correct
    - Check if the selected model is available
 
+6. **TTS (Text-to-Speech) Issues**:
+   - Ensure Piper executable is installed in `tools/piper/` directory
+   - Verify voice model files are downloaded to `models/piper/` directory
+   - Check that speakers/headphones are working and volume is up
+   - Try running `python src/test_tts.py` to test TTS functionality
+   - If TTS fails, check the logs for specific error messages
+
 ## Future Scope
 
 Future enhancements may include:
 - Integration with Home Assistant for smart home control
-- Text-to-speech capabilities using Piper
+- Additional voice models and languages for TTS
+- Voice customization and speech rate controls
 - Additional tool integrations
+- Offline LLM support for complete local operation
 
 ## License
 
