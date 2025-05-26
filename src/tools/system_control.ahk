@@ -21,42 +21,70 @@ if A_Args.Length = 0 {
 command := StrLower(A_Args[1])
 
 try {
+    FileAppend("Processing command: " . command . "`n", "*")
+    
     switch command {
         case "sleep":
+            FileAppend("Calling SleepComputer function`n", "*")
             SleepComputer()
         case "shutdown":
+            FileAppend("Calling ShutdownComputer function`n", "*")
             ShutdownComputer()
         case "restart":
+            FileAppend("Calling RestartComputer function`n", "*")
             RestartComputer()
         case "mute":
+            FileAppend("Calling mute function`n", "*")
             SoundSetMute(true)
             Echo("System muted")
         case "unmute":
+            FileAppend("Calling unmute function`n", "*")
             SoundSetMute(false)
             Echo("System unmuted")
         case "volume-up":
-            amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 100
-            AdjustVolume(amount)
+            FileAppend("Calling volume-up function`n", "*")
+            try {
+                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 100
+                AdjustVolume(amount)
+            } catch {
+                AdjustVolume(100)  ; Default for 100% if parsing fails
+            }
         case "volume-down":
-            amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 50
-            AdjustVolume(-amount)
+            FileAppend("Calling volume-down function`n", "*")
+            try {
+                amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 50
+                AdjustVolume(-amount)
+            } catch {
+                AdjustVolume(-50)  ; Default to -50% if parsing fails
+            }
         case "set-volume":
+            FileAppend("Calling set-volume function`n", "*")
             if (A_Args.Length >= 2) {
-                percentage := Integer(A_Args[2])
-                SetAbsoluteVolume(percentage)
+                try {
+                    percentage := Integer(A_Args[2])
+                    SetAbsoluteVolume(percentage)
+                } catch {
+                    FileAppend("Error: Invalid volume percentage value`n", "*")
+                    ExitApp(1)
+                }
             } else {
                 FileAppend("Error: set-volume requires a percentage value`n", "*")
                 ExitApp(1)
             }
         case "get-volume":
+            FileAppend("Calling get-volume function`n", "*")
             GetVolume()
         case "help":
+            FileAppend("Calling help function`n", "*")
             ShowHelp()
         default:
             FileAppend("Error: Unknown command '" . command . "'`n", "*")
             ShowHelp()
             ExitApp(1)
     }
+    
+    FileAppend("Command completed successfully`n", "*")
+    
 } catch Error as e {
     FileAppend("Error: " . e.message . "`n", "*")
     ExitApp(1)
@@ -64,50 +92,9 @@ try {
 
 ; Function to put the computer to sleep
 SleepComputer() {
-    try {
-        FileAppend("Putting computer to sleep...`n", "*")
-        
-        ; Method 1: Use rundll32 (most reliable for sleep)
-        try {
-            ; Use rundll32 with powrprof.dll - this is the most reliable method
-            Run("rundll32.exe powrprof.dll,SetSuspendState 0,1,0", , "Hide")
-            FileAppend("Sleep command executed via rundll32`n", "*")
-            ExitApp(0)
-        } catch Error as e {
-            FileAppend("rundll32 method failed: " . e.message . "`n", "*")
-        }
-        
-        ; Method 2: Use PowerShell (modern alternative)
-        try {
-            Run('powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"', , "Hide")
-            FileAppend("Sleep command executed via PowerShell`n", "*")
-            ExitApp(0)
-        } catch Error as e {
-            FileAppend("PowerShell method failed: " . e.message . "`n", "*")
-        }
-        
-        ; Method 3: Direct Windows API call (last resort)
-        try {
-            ; Use the Windows API directly - this should work if the others fail
-            ; SetSuspendState(BOOLEAN Hibernate, BOOLEAN ForceCritical, BOOLEAN DisableWakeEvent)
-            result := DllCall("PowrProf.dll\SetSuspendState", "UChar", 0, "UChar", 0, "UChar", 0, "UInt")
-            if (result) {
-                FileAppend("Sleep command executed via Windows API`n", "*")
-                ExitApp(0)
-            } else {
-                FileAppend("Windows API returned false - may require administrator privileges`n", "*")
-            }
-        } catch Error as e {
-            FileAppend("Windows API method failed: " . e.message . "`n", "*")
-        }
-        
-        ; If all methods fail, throw an error
-        throw Error("All sleep methods failed - computer may not support suspend or requires administrator privileges")
-        
-    } catch Error as e {
-        FileAppend("Failed to put computer to sleep: " . e.message . "`n", "*")
-        ExitApp(1)
-    }
+    ; Use the exact command that works from command prompt
+    Run("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
+    ExitApp(0)
 }
 
 ; Function to shutdown the computer
