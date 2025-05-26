@@ -168,8 +168,39 @@ class PiperTTSClient:
                         self._current_speech_id = speech_id
 
                     app_logger.debug(f"[TTS Speak ID: {speech_id}] Generating TTS audio for: '{text[:30]}...' at volume {volume}")
-                    player.play(block=True) # Blocking call
-                    app_logger.debug("TTS playback finished.")
+                    
+                    # Use non-blocking play for immediate interruption capability
+                    player.play(block=False)
+                    
+                    # Since audioplayer doesn't have is_playing(), we'll use a different approach
+                    # We'll track the start time and estimated duration, checking for interruption signals
+                    start_time = time.time()
+                    
+                    # Estimate duration from file size (rough approximation)
+                    # For a more accurate approach, we could parse the WAV header, but this is simpler
+                    try:
+                        file_size = os.path.getsize(temp_path)
+                        # Rough estimate: 44100 Hz * 2 bytes * 1 channel = ~88KB per second
+                        estimated_duration = max(0.1, file_size / 88000)  # minimum 0.1 seconds
+                    except:
+                        estimated_duration = 2.0  # fallback duration
+                    
+                    # Wait for estimated playback duration while checking for stop signals
+                    while time.time() - start_time < estimated_duration:
+                        # Check if we should stop (current_player was changed or cleared)
+                        with self._player_lock:
+                            if self.current_player != player or self._current_speech_id != speech_id:
+                                app_logger.debug(f"[TTS Speak ID: {speech_id}] Playback interrupted - stopping.")
+                                try:
+                                    player.stop()
+                                except Exception as stop_err:
+                                    app_logger.debug(f"[TTS Speak ID: {speech_id}] Error stopping player: {stop_err}")
+                                break
+                        
+                        # Small sleep to avoid busy waiting
+                        time.sleep(0.05)
+                    
+                    app_logger.debug(f"[TTS Speak ID: {speech_id}] TTS playback finished.")
                 elif result.returncode != 0:
                     app_logger.error(f"Piper CLI failed: {result.stderr}")
                     raise Exception(f"Piper CLI error: {result.stderr}")
@@ -186,24 +217,24 @@ class PiperTTSClient:
                 
         except Exception as e:
             app_logger.error(f"[TTS Speak ID: {speech_id}] Error in _speak_text: {e}", exc_info=True)
-            # Ensure player is cleaned up if it exists and error occurs before or during play
+        finally:
+            # Clean up player and clear current player if this speech is still active
             with self._player_lock:
                 if self.current_player and self._current_speech_id == speech_id:
                     try:
                         self.current_player.close() # Close the player to release the file
-                        app_logger.debug(f"[TTS Speak ID: {speech_id}] Closed player due to error in _speak_text.")
+                        app_logger.debug(f"[TTS Speak ID: {speech_id}] Closed current player in finally block.")
                     except Exception as close_err:
-                        app_logger.error(f"[TTS Speak ID: {speech_id}] Error closing player during _speak_text error handling: {close_err}")
+                        app_logger.error(f"[TTS Speak ID: {speech_id}] Error closing current player: {close_err}")
                     self.current_player = None
                     self._current_speech_id = None
-            # Also ensure the local 'player' instance is closed if it was created but not assigned or failed
-            # This handles cases where 'player' was instantiated but an error occurred before it became 'self.current_player'
-            # or before 'self.current_player.play()' was called.
+                    
+            # Also ensure the local 'player' instance is closed if it was created
             if 'player' in locals() and player is not None:
                 try:
-                    if player != self.current_player: # Avoid double-closing if it became current_player and was handled above
-                        player.close()
-                        app_logger.debug(f"[TTS Speak ID: {speech_id}] Closed local player instance due to error in _speak_text.")
+                    # Always close the local player instance to release the file
+                    player.close()
+                    app_logger.debug(f"[TTS Speak ID: {speech_id}] Closed local player instance in finally block.")
                 except Exception as local_close_err:
                     app_logger.error(f"[TTS Speak ID: {speech_id}] Error closing local player instance: {local_close_err}")
     
@@ -223,14 +254,20 @@ class PiperTTSClient:
     def stop_speaking(self):
         """Stop current speech playback by stopping the AudioPlayer."""
         player_to_stop = None
+        speech_id_to_stop = None
+        
         with self._player_lock:
             player_to_stop = self.current_player
+            speech_id_to_stop = self._current_speech_id
+            # Clear current player to signal interruption to the playback loop
+            self.current_player = None
+            self._current_speech_id = None
 
         if player_to_stop:
-            app_logger.debug("Attempting to stop current TTS playback via AudioPlayer.stop().")
+            app_logger.debug(f"Attempting to stop current TTS playback (ID: {speech_id_to_stop}) via AudioPlayer.stop().")
             try:
                 player_to_stop.stop()
-                # player_to_stop.close() # Should be handled by _speak_text's finally block
+                # Don't close here - let _speak_text handle cleanup
             except Exception as e:
                 app_logger.error(f"Error stopping audioplayer: {e}", exc_info=True)
         else:
