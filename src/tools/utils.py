@@ -1,7 +1,14 @@
 import subprocess
 import logging
+import threading
+import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union
+
+# Global variables to track active volume transition thread
+_active_volume_thread: Optional[threading.Thread] = None
+_volume_thread_lock = threading.Lock()
+_volume_transition_cancelled = threading.Event()
 
 # Windows volume control imports
 try:
@@ -45,12 +52,15 @@ def GetSystemVolume() -> Optional[int]:
         except:
             pass
 
-def SetSystemVolume(percentage: Union[int, float]) -> bool:
+def SetSystemVolume(percentage: Union[int, float], duration: Optional[float] = None, steps: int = 20) -> bool:
     """
     Set the system volume to a specific percentage using pycaw (Windows).
     
     Args:
         percentage: Volume percentage (0-100)
+        duration: If provided, gradually change volume over this duration (seconds).
+                 If None, change volume instantly.
+        steps: Number of intermediate steps for gradual change (default: 20)
         
     Returns:
         True if successful, False otherwise
@@ -59,23 +69,66 @@ def SetSystemVolume(percentage: Union[int, float]) -> bool:
         util_logger.error("pycaw library not available. Install with: pip install pycaw comtypes")
         return False
         
+    # Convert to float and validate range
     try:
-        # Convert to float and validate range
         volume_percent = float(percentage)
         if volume_percent < 0 or volume_percent > 100:
             util_logger.error(f"Invalid volume percentage: {volume_percent}. Must be 0-100.")
             return False
+    except (ValueError, TypeError):
+        util_logger.error(f"Invalid volume percentage: {percentage}. Must be a number 0-100.")
+        return False
+    
+    # If no duration specified, use instant volume change
+    if duration is None or duration <= 0:
+        return _set_volume_instant(volume_percent)
+    
+    # Use gradual volume change in a separate thread
+    with _volume_thread_lock:
+        # Cancel any existing volume transition
+        global _active_volume_thread, _volume_transition_cancelled
+        if _active_volume_thread and _active_volume_thread.is_alive():
+            util_logger.debug("Cancelling previous volume transition")
+            _volume_transition_cancelled.set()
+            # Give the previous thread a moment to notice cancellation
+            time.sleep(0.05)
         
+        # Reset cancellation flag for new transition
+        _volume_transition_cancelled.clear()
+        
+        thread = threading.Thread(
+            target=_gradual_volume_change,
+            args=(volume_percent, duration, steps),
+            daemon=True,
+            name="VolumeTransition"
+        )
+        _active_volume_thread = thread
+        thread.start()
+    
+    util_logger.debug(f"Started gradual volume transition to {volume_percent}% over {duration}s")
+    return True
+
+def _set_volume_instant(percentage: float) -> bool:
+    """
+    Internal function to set volume instantly.
+    
+    Args:
+        percentage: Volume percentage (0-100), already validated
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
         pythoncom.CoInitialize()
         devices = AudioUtilities.GetSpeakers()
         interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
         volume = interface.QueryInterface(IAudioEndpointVolume)
         
         # Convert percentage to scalar (0.0 - 1.0)
-        volume_scalar = volume_percent / 100.0
+        volume_scalar = percentage / 100.0
         volume.SetMasterVolumeLevelScalar(volume_scalar, None)
         
-        util_logger.debug(f"System volume set to {volume_percent}%")
+        util_logger.debug(f"System volume set to {percentage}%")
         return True
         
     except Exception as e:
@@ -86,6 +139,96 @@ def SetSystemVolume(percentage: Union[int, float]) -> bool:
             pythoncom.CoUninitialize()
         except:
             pass
+
+def _gradual_volume_change(target_percentage: float, duration: float, steps: int) -> None:
+    """
+    Internal function to gradually change volume over time.
+    Runs in a separate thread.
+    
+    Args:
+        target_percentage: Target volume percentage (0-100)
+        duration: Duration of the transition in seconds
+        steps: Number of intermediate steps
+    """
+    try:
+        # Get current volume
+        current_volume = GetSystemVolume()
+        if current_volume is None:
+            util_logger.error("Could not get current volume for gradual change")
+            return
+        
+        # Check if we're already at the target volume
+        if abs(current_volume - target_percentage) < 1:
+            util_logger.debug(f"Already at target volume {target_percentage}%, skipping transition")
+            return
+        
+        # Calculate step parameters
+        volume_diff = target_percentage - current_volume
+        step_size = volume_diff / steps
+        step_duration = duration / steps
+        
+        util_logger.debug(f"Gradual volume change: {current_volume}% → {target_percentage}% "
+                         f"over {duration}s in {steps} steps")
+        
+        # Perform gradual change
+        for i in range(1, steps + 1):
+            # Check for cancellation
+            if _volume_transition_cancelled.is_set():
+                util_logger.debug("Volume transition cancelled")
+                return
+            
+            intermediate_volume = current_volume + (step_size * i)
+            
+            # Ensure we don't exceed bounds due to floating point precision
+            intermediate_volume = max(0, min(100, intermediate_volume))
+            
+            if not _set_volume_instant(intermediate_volume):
+                util_logger.error(f"Failed to set intermediate volume at step {i}")
+                return
+            
+            # Sleep between steps (except after the last step)
+            if i < steps:
+                # Use cancellation-aware sleep
+                if _volume_transition_cancelled.wait(step_duration):
+                    util_logger.debug("Volume transition cancelled during sleep")
+                    return
+        
+        util_logger.debug(f"Gradual volume change completed: {target_percentage}%")
+        
+    except Exception as e:
+        util_logger.error(f"Error during gradual volume change: {e}", exc_info=True)
+
+def SetSystemVolumeGradual(percentage: Union[int, float], duration: float = 2.0, steps: int = 20) -> bool:
+    """
+    Convenience function to set system volume with gradual transition.
+    
+    Args:
+        percentage: Target volume percentage (0-100)
+        duration: Duration of the transition in seconds (default: 2.0)
+        steps: Number of intermediate steps (default: 20)
+        
+    Returns:
+        True if transition started successfully, False otherwise
+    """
+    return SetSystemVolume(percentage, duration=duration, steps=steps)
+
+def CancelVolumeTransition() -> bool:
+    """
+    Cancel any active volume transition.
+    
+    Returns:
+        True if a transition was cancelled, False if no transition was active
+    """
+    global _active_volume_thread, _volume_transition_cancelled
+    
+    with _volume_thread_lock:
+        if _active_volume_thread and _active_volume_thread.is_alive():
+            util_logger.debug("Cancelling active volume transition")
+            _volume_transition_cancelled.set()
+            return True
+        else:
+            util_logger.debug("No active volume transition to cancel")
+            return False
 
 def run_ahk_script(
     script_path: Union[str, Path],
