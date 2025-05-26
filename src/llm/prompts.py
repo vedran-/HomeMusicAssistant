@@ -160,7 +160,7 @@ def get_available_tools() -> List[Dict[str, Any]]:
                             "type": "integer",
                             "description": "Number of seconds for forward/back actions (default: 10)",
                             "minimum": 1,
-                            "maximum": 300
+                            "maximum": 18000
                         },
                         "search_term": {
                             "type": "string",

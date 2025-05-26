@@ -35,10 +35,10 @@ try {
             SoundSetMute(false)
             Echo("System unmuted")
         case "volume-up":
-            amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+            amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 100
             AdjustVolume(amount)
         case "volume-down":
-            amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 10
+            amount := (A_Args.Length >= 2) ? Integer(A_Args[2]) : 50
             AdjustVolume(-amount)
         case "set-volume":
             if (A_Args.Length >= 2) {
@@ -67,17 +67,42 @@ SleepComputer() {
     try {
         FileAppend("Putting computer to sleep...`n", "*")
         
-        ; Use Windows API to suspend the system
-        result := DllCall("PowrProf.dll\SetSuspendState", "int", 0, "int", 0, "int", 0)
-        
-        if (result = 0) {
-            ; If the API call fails, try alternative method
-            FileAppend("Primary sleep method failed, trying alternative...`n", "*")
+        ; Method 1: Use rundll32 (most reliable for sleep)
+        try {
+            ; Use rundll32 with powrprof.dll - this is the most reliable method
             Run("rundll32.exe powrprof.dll,SetSuspendState 0,1,0", , "Hide")
+            FileAppend("Sleep command executed via rundll32`n", "*")
+            ExitApp(0)
+        } catch Error as e {
+            FileAppend("rundll32 method failed: " . e.message . "`n", "*")
         }
         
-        FileAppend("Sleep command executed`n", "*")
-        ExitApp(0)
+        ; Method 2: Use PowerShell (modern alternative)
+        try {
+            Run('powershell.exe -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState([System.Windows.Forms.PowerState]::Suspend, $false, $false)"', , "Hide")
+            FileAppend("Sleep command executed via PowerShell`n", "*")
+            ExitApp(0)
+        } catch Error as e {
+            FileAppend("PowerShell method failed: " . e.message . "`n", "*")
+        }
+        
+        ; Method 3: Direct Windows API call (last resort)
+        try {
+            ; Use the Windows API directly - this should work if the others fail
+            ; SetSuspendState(BOOLEAN Hibernate, BOOLEAN ForceCritical, BOOLEAN DisableWakeEvent)
+            result := DllCall("PowrProf.dll\SetSuspendState", "UChar", 0, "UChar", 0, "UChar", 0, "UInt")
+            if (result) {
+                FileAppend("Sleep command executed via Windows API`n", "*")
+                ExitApp(0)
+            } else {
+                FileAppend("Windows API returned false - may require administrator privileges`n", "*")
+            }
+        } catch Error as e {
+            FileAppend("Windows API method failed: " . e.message . "`n", "*")
+        }
+        
+        ; If all methods fail, throw an error
+        throw Error("All sleep methods failed - computer may not support suspend or requires administrator privileges")
         
     } catch Error as e {
         FileAppend("Failed to put computer to sleep: " . e.message . "`n", "*")
