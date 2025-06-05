@@ -6,6 +6,7 @@ import numpy as np
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
 from src.utils.audio_effects import play_wake_word_accepted_sound
+from src.utils.power_management import CrossPlatformPowerManager  # Add power management
 from src.tts.piper_client import PiperTTSClient # Added for TTS control
 from typing import Optional # Ensure Optional is imported if not already
 
@@ -13,6 +14,9 @@ class WakeWordDetector:
     def __init__(self, settings: AppSettings, tts_client: Optional[PiperTTSClient] = None):
         self.settings = settings
         self.tts_client = tts_client
+        
+        # Initialize power manager for cross-platform sleep control
+        self.power_manager = CrossPlatformPowerManager()
         
         # Limit to only supported wake word models - alexa first as default
         self.supported_models = ["alexa", "hey_jarvis"]
@@ -184,6 +188,9 @@ class WakeWordDetector:
             # Ensure any previous stream is closed
             self.stop_listening()
             
+            # Allow system sleep while we're listening for wake words
+            self.power_manager.allow_system_sleep()
+            
             self.stream = self.pa.open(
                 format=pyaudio.paInt16,
                 channels=1,
@@ -211,6 +218,11 @@ class WakeWordDetector:
                 if self.active_model in prediction and prediction[self.active_model] > self.sensitivity:
                     app_logger.info(f"Wake word '{self.active_model}' detected with score {prediction[self.active_model]:.2f}!")
 
+                    self.stop_listening() # Stop microphone listening first
+                    
+                    # Improved reset to prevent continuous detection
+                    self._reset_model_state()
+                    
                     # Stop any ongoing TTS playback
                     if self.tts_client:
                         # Check is_speaking with the lock if possible, or rely on its internal thread-safety
@@ -218,19 +230,10 @@ class WakeWordDetector:
                         if self.tts_client.is_speaking:
                             app_logger.info("Wake word detected: Stopping ongoing TTS playback.")
                             self.tts_client.stop_speaking()
-                            # Give a brief moment for TTS to actually stop if it involves async operations
-                            # This might not be strictly necessary if stop_speaking is blocking enough
-                            # or if the subsequent actions don't interfere.
-                            # time.sleep(0.1) # Optional small delay
 
-                    self.stop_listening() # Stop microphone listening first
-                    
-                    # Improved reset to prevent continuous detection
-                    self._reset_model_state()
-                    
                     # Add a longer cooldown period to prevent immediate re-triggering
                     # This gives time for any residual audio/echo to clear
-                    self.chunks_to_skip = 30 # e.g., 30 * 80ms = 2400ms cooldown
+                    self.chunks_to_skip = 50 # 50 * 80ms = 4000ms cooldown
 
                     play_wake_word_accepted_sound() # Play sound after stopping other things
                     
@@ -252,6 +255,9 @@ class WakeWordDetector:
                 app_logger.error(f"Error stopping wake word audio stream: {e}")
             finally:
                 self.stream = None
+        
+        # Reset power state when we stop listening
+        self.power_manager.reset_power_state()
 
     def __del__(self):
         # Clean up PyAudio instance when the detector is garbage collected
@@ -262,6 +268,10 @@ class WakeWordDetector:
                 app_logger.debug("PyAudio instance terminated for WakeWordDetector.")
             except Exception as e:
                 app_logger.error(f"Error terminating PyAudio instance in WakeWordDetector: {e}")
+        
+        # Ensure power state is reset
+        if hasattr(self, 'power_manager'):
+            self.power_manager.reset_power_state()
 
 if __name__ == '__main__':
     # This is for basic testing of the WakeWordDetector
