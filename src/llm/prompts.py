@@ -151,13 +151,13 @@ def get_available_tools() -> List[Dict[str, Any]]:
             "type": "function",
             "function": {
                 "name": "music_control",
-                "description": "Advanced music control including time navigation, song feedback, and playback modes. Use this for forward/back, like/dislike, shuffle, repeat, and other advanced controls.",
+                "description": "Advanced music control including time navigation, song feedback, and playback modes. Use this for forward/back, like/dislike, shuffle, and repeat.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "action": {
                             "type": "string",
-                            "enum": ["forward", "back", "rewind", "like", "dislike", "shuffle", "repeat", "search"],
+                            "enum": ["forward", "back", "rewind", "like", "dislike", "shuffle", "repeat"],
                             "description": "The advanced music action to perform"
                         },
                         "amount": {
@@ -165,13 +165,21 @@ def get_available_tools() -> List[Dict[str, Any]]:
                             "description": "Number of seconds for forward/back actions (default: 10)",
                             "minimum": 1,
                             "maximum": 18000
-                        },
-                        "search_term": {
-                            "type": "string",
-                            "description": "Search term for music search action"
                         }
                     },
                     "required": ["action"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_song_info",
+                "description": "Gets information about the song that is currently playing, such as the title and artist.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
                 }
             }
         },

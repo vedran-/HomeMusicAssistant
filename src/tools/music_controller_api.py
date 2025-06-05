@@ -293,8 +293,14 @@ class YouTubeMusicAPIController:
             Queue information or None if request failed
         """
         response = self._make_request("GET", "queue")
-        if response.get("success", True) and not isinstance(response, dict):
+        if response.get("success") is False:
+            logger.error(f"API request for get_queue failed: {response.get('error')}")
+            return None
+        
+        # Successful response for queue should be a dict.
+        if isinstance(response, dict):
             return response
+            
         return None
     
     def clear_queue(self) -> Dict[str, Any]:
@@ -327,8 +333,18 @@ class YouTubeMusicAPIController:
             Song information or None if request failed
         """
         response = self._make_request("GET", "song")
-        if response.get("success", True) and not isinstance(response, dict):
+        # On failure, _make_request returns {'success': False, ...}
+        if response.get("success") is False:
+            logger.error(f"API request for get_current_song failed: {response.get('error')}")
+            return None
+        
+        # On success, the API returns the song object if a song is active.
+        # Check for 'videoId' as a reliable key for a valid song object.
+        if isinstance(response, dict) and "videoId" in response:
             return response
+            
+        # This case handles when no song is playing, server might return {} or {'success': true}
+        logger.info("get_current_song was called, but no song appears to be playing.")
         return None
     
     # === Search ===

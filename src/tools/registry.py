@@ -82,6 +82,8 @@ class ToolRegistry:
                 return self._execute_get_time(parameters)
             elif tool_name == "speak_response":
                 return self._execute_speak_response(parameters)
+            elif tool_name == "get_song_info":
+                return self._execute_get_song_info(parameters)
             else:
                 app_logger.error(f"Unknown tool name: {tool_name}")
                 return {
@@ -248,57 +250,84 @@ class ToolRegistry:
     def _execute_control_volume(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute volume control commands using AutoHotkey system_control.ahk."""
         action = parameters.get("action", "up")
-        amount = parameters.get("amount")
+        amount = parameters.get("amount", 10) # Default amount
         
-        script_path = self.scripts_dir / "system_control.ahk"
+        app_logger.info(f"Executing volume control: {action} by {amount}")
         
-        if action == "up":
-            command = ["volume-up"]
-            if amount:
-                command.append(str(amount))
-            feedback = f"Volume increased" + (f" by {amount}%" if amount else "")
+        try:
+            script_path = self.scripts_dir / "system_control.ahk"
+            args = [action, str(amount)]
             
-        elif action == "down":
-            command = ["volume-down"]
-            if amount:
-                command.append(str(amount))
-            feedback = f"Volume decreased" + (f" by {amount}%" if amount else "")
+            result = run_ahk_script(
+                script_path=str(script_path),
+                args=args,
+                autohotkey_exe_path=self.autohotkey_exe,
+                logger=app_logger
+            )
             
-        elif action == "set":
-            if amount is None:
-                return {
-                    "success": False,
-                    "error": "Amount required for set volume action",
-                    "feedback": "Please specify a volume percentage to set"
-                }
-            command = ["set-volume", str(amount)]
-            feedback = f"Volume set to {amount}%"
+            if not result["success"]:
+                raise ToolExecutionError(result.get("error_message", "Failed to run AHK script"))
             
-        elif action == "mute":
-            command = ["mute"]
-            feedback = "Volume muted"
+            # Construct feedback based on action
+            if action == "up":
+                feedback = f"Volume increased by {amount}%"
+            elif action == "down":
+                feedback = f"Volume decreased by {amount}%"
+            elif action == "set":
+                feedback = f"Volume set to {amount}%"
+            elif action == "mute" or action == "unmute" or action == "toggle_mute":
+                feedback = "Mute toggled"
+            else:
+                feedback = "Volume adjusted"
             
-        elif action == "unmute":
-            command = ["unmute"]
-            feedback = "Volume unmuted"
+            return {
+                "success": True,
+                "output": result.get("stdout", ""),
+                "feedback": feedback
+            }
             
-        else:
+        except Exception as e:
+            app_logger.error(f"Volume control failed: {str(e)}", exc_info=True)
             return {
                 "success": False,
-                "error": f"Unknown volume action: {action}",
-                "feedback": f"I don't know how to {action} the volume"
+                "error": str(e),
+                "feedback": f"Failed to control volume: {str(e)}"
             }
-        
-        result = self._run_autohotkey_script(script_path, command)
-        
-        if result["success"]:
-            result["feedback"] = feedback
-            # Try to capture the new volume level from output
-            if result.get("output") and result["output"].strip().isdigit():
-                volume_level = result["output"].strip()
-                result["feedback"] += f" (now at {volume_level}%)"
-        
-        return result
+
+    def _execute_get_song_info(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Gets information about the currently playing song."""
+        app_logger.info("Executing get_song_info")
+        try:
+            song_info = self.music_api.get_current_song()
+            
+            if song_info and all(k in song_info for k in ["title", "artist"]):
+                title = song_info.get("title", "Unknown Title")
+                artist = song_info.get("artist", "Unknown Artist")
+                
+                feedback = f"The current song is '{title}' by '{artist}'."
+                app_logger.info(f"Song info found: {feedback}")
+                
+                return {
+                    "success": True,
+                    "output": json.dumps(song_info),
+                    "feedback": feedback
+                }
+            else:
+                feedback = "I can't get the song info right now. Is anything playing?"
+                app_logger.info(f"No song info available or response was incomplete. Response: {song_info}")
+                return {
+                    "success": False,
+                    "error": "No song information available.",
+                    "feedback": feedback
+                }
+                
+        except Exception as e:
+            app_logger.error(f"Exception in get_song_info: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "feedback": "Sorry, I ran into an error trying to get the song information."
+            }
 
     def _execute_system_control(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute system control commands."""
