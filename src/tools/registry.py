@@ -78,8 +78,6 @@ class ToolRegistry:
                 return self._execute_system_control(parameters)
             elif tool_name == "unknown_request":
                 return self._handle_unknown_request(parameters)
-            elif tool_name == "get_time":
-                return self._execute_get_time(parameters)
             elif tool_name == "speak_response":
                 return self._execute_speak_response(parameters)
             elif tool_name == "get_song_info":
@@ -372,64 +370,6 @@ class ToolRegistry:
             "output": reason,
             "feedback": f"I'm sorry, I can't help with that. {reason}"
         }
-
-    def _execute_get_time(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute get_time tool to return current system time and optionally date."""
-        include_date = parameters.get("include_date", False)
-        time_format = parameters.get("format", "auto")
-        
-        try:
-            now = datetime.now()
-            
-            # Create human-friendly time format
-            hour = now.hour
-            minute = now.minute
-            
-            # Convert to 12-hour format if requested
-            if time_format == "12hour":
-                am_pm = "AM" if hour < 12 else "PM"
-                display_hour = hour if hour <= 12 else hour - 12
-                if display_hour == 0:
-                    display_hour = 12
-                time_str = f"{display_hour} {self._hour_word(display_hour)} and {minute} {self._minute_word(minute)} {am_pm}"
-            elif time_format == "24hour" or time_format == "auto":  # Default to 24-hour
-                time_str = f"{hour} {self._hour_word(hour)} and {minute} {self._minute_word(minute)}"
-            else:
-                # Fallback to 24-hour
-                time_str = f"{hour} {self._hour_word(hour)} and {minute} {self._minute_word(minute)}"
-            
-            # Add date if requested
-            if include_date:
-                date_str = now.strftime('%A, %B %d, %Y')
-                output = f"{date_str} at {time_str}"
-                feedback = f"Today is {date_str} and the current time is {time_str}"
-            else:
-                output = time_str
-                feedback = f"The current time is {time_str}"
-            
-            app_logger.info(f"Time request - include_date: {include_date}, format: {time_format}, result: {output}")
-            
-            return {
-                "success": True,
-                "output": output,
-                "feedback": feedback
-            }
-            
-        except Exception as e:
-            app_logger.error(f"Failed to get current time: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "feedback": "Sorry, I couldn't get the current time"
-            }
-    
-    def _hour_word(self, hour: int) -> str:
-        """Return 'hour' or 'hours' based on the number."""
-        return "hour" if hour == 1 else "hours"
-    
-    def _minute_word(self, minute: int) -> str:
-        """Return 'minute' or 'minutes' based on the number."""
-        return "minute" if minute == 1 else "minutes"
 
     def _execute_speak_response(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
         """Execute speak_response tool to provide informational responses."""

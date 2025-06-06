@@ -31,5 +31,12 @@ Home Assistant to control different devices.
 But this is out of scope for now.
 
 # TODO
++ Add support for 'what's this song'
+- Add support for get-volume with TTS
+
+- Add support for LLM to do simple tool calling and get result back, e.g. user: 'how long until midnight?' -> llm: tool get_datetime -> calculate and output result
+
+- Add support for some memory
+
 - Add support for MCP and general internet use
 - Add support for Home Assistant

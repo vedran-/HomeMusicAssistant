@@ -154,10 +154,11 @@ class LiteLLMClient:
                     
                     # Return text response for TTS - this allows the assistant to speak responses
                     if text_response:
-                        return {
-                            "tool_name": "speak_response",
-                            "parameters": {"message": text_response}
-                        }
+                        return None
+                        #return {
+                        #    "tool_name": "speak_response",
+                        #    "parameters": {"message": text_response}
+                        #}
                     return None
                     
             except Exception as e:

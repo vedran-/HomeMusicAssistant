@@ -197,8 +197,6 @@ def run_voice_assistant(settings: AppSettings):
                         app_logger.info("💻 System control command executed")
                     elif tool_name == "speak_response":
                         app_logger.info("🗣️ Informational response provided")
-                    elif tool_name == "get_time":
-                        app_logger.info("🕐 Time information provided")
                     elif tool_name == "unknown_request":
                         app_logger.info("❓ Unknown request handled")
                 else:

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Dict, Any
 
 def get_system_prompt() -> str:
@@ -19,6 +20,7 @@ This includes:
 - Direct factual questions (e.g., "What is the capital of France?" → respond with speak_response, message="Paris")
 - Explicite requests for creative content (e.g., "Tell me a story about sun" → respond with speak_response, message="[Your story text]")
 - Explanations or clarifications
+- If asked about time, respond with words, not numbers. E.g. Instead of "It's 14:27", say "It's 14 hours and 27 minutes"
 
 CRITICAL PARAMETER USAGE:
 - ALWAYS use the parameter name 'message' (not 'text') with the speak_response tool
@@ -51,9 +53,6 @@ Whenever the user says "play" followed by a search query, always use the play_mu
 If the user explicitly mentions "radio" (e.g., "play Pink Floyd radio"), set play_type="radio".
 Otherwise, for general play requests (e.g., "play Pink Floyd"), use play_type="default" or omit it.
 Do NOT use unknown_request for play commands - the music system can search for anything.
-
-CRITICAL RULE FOR TIME:
-When the user asks for the current time, date, or "what time is it", use the get_time tool.
 
 Examples:
 - If user says "play some music" → call play_music with action="play" (play_type can be omitted or "default")
@@ -90,10 +89,6 @@ Examples:
 - If user says "make volume exactly 75%" → call control_volume with action="set", amount=75
 - If user says "put the computer to sleep" → call system_control with action="sleep"
 - If user says "restart the computer" → call system_control with action="restart"
-- If user says "what time is it" → call get_time
-- If user says "what's the current time" → call get_time
-- If user says "tell me the time" → call get_time
-- If user says "what's today's date" → call get_time with include_date=true
 - If user says "what is the capital of France" → call speak_response with message="Paris"
 - If user says "what's 25 plus 17" → call speak_response with message="42"
 - If user says "how many days in a year" → call speak_response with message="365 days, or 366 in a leap year"
@@ -101,7 +96,8 @@ Examples:
 - If user says "s desfos" → call speak_response with message="I could not understand the command"
 - If user says "Thank you" → do nothing
 - If user says "Subtitles by amaro.com" → do nothing
-"""
+
+Current date and time: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def get_available_tools() -> List[Dict[str, Any]]:
     """
@@ -222,30 +218,6 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         }
                     },
                     "required": ["action"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "get_time",
-                "description": "Get the current system time and optionally the date in human-friendly format (e.g., '14 hours and 27 minutes'). Use this when user asks for time, current time, or date.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "include_date": {
-                            "type": "boolean",
-                            "description": "Whether to include the current date along with time. Default: false (time only).",
-                            "default": False
-                        },
-                        "format": {
-                            "type": "string",
-                            "enum": ["12hour", "24hour", "auto"],
-                            "description": "Time format preference. 'auto' uses 24-hour format (default). Default: 'auto'.",
-                            "default": "auto"
-                        }
-                    },
-                    "required": []
                 }
             }
         },
