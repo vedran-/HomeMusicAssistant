@@ -144,7 +144,7 @@ def run_voice_assistant(settings: AppSettings):
                 app_logger.error("Wake word detection failed. Retrying...")
                 time.sleep(1)
                 continue
-                
+            
             app_logger.info("🎯 Wake word detected! Listening for command...")
 
             system_volume = GetSystemVolume()

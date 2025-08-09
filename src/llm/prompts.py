@@ -97,7 +97,7 @@ Examples:
 - If user says "Thank you" → do nothing
 - If user says "Subtitles by amaro.com" → do nothing
 
-Current date and time: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+Current date and time: """ + datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
 
 def get_available_tools() -> List[Dict[str, Any]]:
     """
