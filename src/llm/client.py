@@ -112,7 +112,7 @@ class LiteLLMClient:
         # Prepare messages for the LLM
         messages = [
             {"role": "system", "content": final_system_prompt},
-            {"role": "user", "content": transcript}
+            {"role": "user", "content": f"Transcript: {transcript}\n\nRelevant memories:\n{memories}\n\nBased on this, decide which tool to call. If it's a user preference or something to remember long-term, note it in your response."}
         ]
         
         # Retry logic with exponential backoff

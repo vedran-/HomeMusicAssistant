@@ -43,34 +43,36 @@ class MemoryManager:
             self.mem0 = None
             app_logger.info("MemoryManager is disabled.")
 
-    def add(self, messages: List[Dict[str, Any]], user_id: str, session_id: str):
+    def add(self, messages: List[Dict[str, Any]], user_id: str, session_id: Optional[str] = None, infer: bool = True):
         if not self.enabled:
             return
 
         try:
-            metadata = {"type": "session", "session_id": session_id}
+            metadata = {}
+            if session_id:
+                metadata = {"type": "session", "session_id": session_id}
             app_logger.debug(f"Adding to memory for user '{user_id}': {messages}")
-            add_return = self.mem0.add(messages=messages, user_id=user_id, metadata=metadata)
+            add_return = self.mem0.add(messages=messages, user_id=user_id, metadata=metadata, infer=infer)
             app_logger.info(f"Add returned: {add_return}")
-            app_logger.info(f"Successfully added memory for user '{user_id}' in session '{session_id}'. Response: {self.mem0.get_all(user_id=user_id, filters={'session_id': session_id})}")
-            app_logger.debug(f"Added conversation to memory for user '{user_id}' in session '{session_id}'.")
+            app_logger.info(f"Successfully added memory for user '{user_id}' {'in session ' + session_id if session_id else 'as long-term'}. Response: {self.mem0.get_all(user_id=user_id, filters={'session_id': session_id} if session_id else {})}")
+            app_logger.debug(f"Added conversation to memory for user '{user_id}' {'in session ' + session_id if session_id else 'as long-term'}.")
         except Exception as e:
             app_logger.error("Failed to add memory for user '{}': {}", user_id, e, exc_info=True)
 
-    def search(self, query: str, user_id: str, session_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+    def search(self, query: str, user_id: str, session_id: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
         if not self.enabled:
             return []
             
         try:
-            # Search for memories within the same session
+            filters = {"session_id": session_id} if session_id else {}
             session_memories = self.mem0.search(
                 query=query, 
                 user_id=user_id, 
                 limit=limit,
-                filters={"session_id": session_id}
+                filters=filters
             )
             app_logger.info(f"Raw search results for query '{query}': {session_memories}")
-            app_logger.debug(f"Found {len(session_memories.get('results', []))} session memories for user '{user_id}' in session '{session_id}'.")
+            app_logger.debug(f"Found {len(session_memories.get('results', []))} memories for user '{user_id}' {'in session ' + session_id if session_id else 'as long-term'}.")
             if session_memories.get('results'):
                 app_logger.debug(f"Retrieved memories: {session_memories['results']}")
             results = [r for r in session_memories.get('results', []) if r.get('score', 0) > 0.5]
@@ -80,7 +82,7 @@ class MemoryManager:
             return []
 
     def clear_session(self, user_id: str, session_id: str):
-        if not self.enabled:
+        if not self.enabled or not session_id:
             return
 
         try:

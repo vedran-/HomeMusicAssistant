@@ -21,7 +21,8 @@ class TestMemoryManager(unittest.TestCase):
         
         cls.memory_manager = MemoryManager(cls.settings.mem0_config)
         cls.user_id = "test_user"
-        cls.session_id = "test_session_123"
+        cls.session_id1 = "test_session_123"
+        cls.session_id2 = "test_session_456"
 
     @classmethod
     def tearDownClass(cls):
@@ -34,7 +35,12 @@ class TestMemoryManager(unittest.TestCase):
 
     def setUp(self):
         """Set up a fresh state for each test by clearing memories."""
-        self.memory_manager.clear_session(user_id=self.user_id, session_id=self.session_id)
+        self.memory_manager.clear_session(user_id=self.user_id, session_id=self.session_id1)
+        self.memory_manager.clear_session(user_id=self.user_id, session_id=self.session_id2)
+        # Clear long-term by searching and deleting without session filter if needed
+        all_memories = self.memory_manager.mem0.get_all(user_id=self.user_id)
+        for mem in all_memories.get('results', []):
+            self.memory_manager.mem0.delete(memory_id=mem['id'])
 
     def test_01_initialization(self):
         """Test if MemoryManager initializes correctly."""
@@ -42,35 +48,83 @@ class TestMemoryManager(unittest.TestCase):
         self.assertTrue(self.memory_manager.enabled, "MemoryManager should be enabled")
         self.assertIsNotNone(self.memory_manager.mem0, "mem0 instance should be created")
 
-    def test_02_add_and_search_memory(self):
-        """Test adding to and searching memory."""
-        # 1. Add some data
+    def test_02_add_and_search_session_memory(self):
+        """Test adding to and searching session-specific memory."""
+        # 1. Add session data
         messages_to_add = [
-            {"role": "user", "content": "My favorite color is blue."},
-            {"role": "assistant", "content": "I will remember that your favorite color is blue."}
+            {"role": "user", "content": "I prefer blue as my favorite color."},
+            {"role": "assistant", "content": "Noted your preference for blue."}
         ]
-        self.memory_manager.add(messages=messages_to_add, user_id=self.user_id, session_id=self.session_id)
+        self.memory_manager.add(messages_to_add, user_id=self.user_id, session_id=self.session_id1, infer=False)
         
-        # 2. Search for the data
+        # 2. Search with session filter
         query = "What is my favorite color?"
-        search_results = self.memory_manager.search(query=query, user_id=self.user_id, session_id=self.session_id)
+        search_results = self.memory_manager.search(query=query, user_id=self.user_id, session_id=self.session_id1)
         
         # 3. Verify the results
-        self.assertIsNotNone(search_results, "Search results should not be None")
-        self.assertIsInstance(search_results, list, "Search results should be a list")
-        self.assertGreater(len(search_results), 0, "Should find at least one relevant memory")
-
-        # Check the content of the results
+        self.assertGreater(len(search_results), 0, "Should find session memory")
         found_match = any("blue" in result.get('memory', '').lower() for result in search_results)
-        self.assertTrue(found_match, "The retrieved memory should contain the favorite color 'blue'")
+        self.assertTrue(found_match, "Should find session memory about blue")
 
-    def test_03_search_with_no_results(self):
-        """Test a search that should yield no results."""
-        query = "What is the capital of Mars?"
-        search_results = self.memory_manager.search(query=query, user_id=self.user_id, session_id=self.session_id)
+        # 4. Search without session filter or with different session should not find it (depending on impl)
+        search_results_no_session = self.memory_manager.search(query=query, user_id=self.user_id, session_id="different")
+        self.assertEqual(len(search_results_no_session), 0, "Should not find in different session")
+
+    def test_03_add_and_search_long_term_memory(self):
+        """Test adding to and searching long-term memory (no session)."""
+        # 1. Add long-term data (without session_id)
+        messages_to_add = [
+            {"role": "user", "content": "My long-term favorite food is pizza."},
+            {"role": "assistant", "content": "Remembered your preference for pizza."}
+        ]
+        # Add without session_id - modify add to allow None session_id
+        self.memory_manager.add(messages_to_add, user_id=self.user_id, session_id=None, infer=True)  # Assuming code allows None
         
-        self.assertEqual(len(search_results), 0, "Search for irrelevant info should return no results")
+        # 2. Search without session filter
+        query = "What is my favorite food?"
+        search_results = self.memory_manager.search(query=query, user_id=self.user_id, session_id=None)  # None for long-term
+        
+        # 3. Verify
+        self.assertGreater(len(search_results), 0, "Should find long-term memory")
+        found_match = any("pizza" in result.get('memory', '').lower() for result in search_results)
+        self.assertTrue(found_match, "Should find long-term memory about pizza")
 
+    def test_04_clear_session_does_not_affect_long_term(self):
+        """Test clearing session memory doesn't affect long-term."""
+        # Add session and long-term
+        self.test_02_add_and_search_session_memory()
+        self.test_03_add_and_search_long_term_memory()
+        
+        # Clear session
+        self.memory_manager.clear_session(user_id=self.user_id, session_id=self.session_id1)
+        
+        # Session search should be empty
+        search_results_session = self.memory_manager.search("favorite color", self.user_id, self.session_id1)
+        self.assertEqual(len(search_results_session), 0, "Session memory should be cleared")
+        
+        # Long-term should still be there
+        search_results_long = self.memory_manager.search("favorite food", self.user_id, None)
+        self.assertGreater(len(search_results_long), 0, "Long-term memory should remain")
+
+    def test_05_multiple_sessions(self):
+        """Test memories in different sessions are isolated."""
+        # Add to session1
+        messages1 = [{"role": "user", "content": "I like apples in session1."}]
+        self.memory_manager.add(messages1, self.user_id, self.session_id1, infer=False)
+        
+        # Add to session2
+        messages2 = [{"role": "user", "content": "I like bananas in session2."}]
+        self.memory_manager.add(messages2, self.user_id, self.session_id2, infer=False)
+        
+        # Search session1
+        results1 = self.memory_manager.search("like", self.user_id, self.session_id1)
+        self.assertTrue(any("apples" in r['memory'].lower() for r in results1))
+        self.assertFalse(any("bananas" in r['memory'].lower() for r in results1))
+        
+        # Search session2
+        results2 = self.memory_manager.search("like", self.user_id, self.session_id2)
+        self.assertTrue(any("bananas" in r['memory'].lower() for r in results2))
+        self.assertFalse(any("apples" in r['memory'].lower() for r in results2))
 
 if __name__ == '__main__':
     print("Running MemoryManager tests...")

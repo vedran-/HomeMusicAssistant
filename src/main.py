@@ -231,23 +231,27 @@ def run_voice_assistant(settings: AppSettings):
                 
                 # --- Memory Integration ---
                 if memory_manager.enabled:
-                    # 2. Add a simplified summary of the exchange to memory
+                    # 2. Add to session memory
                     assistant_response = execution_result.get('feedback', 'OK.')
                     
-                    # Create a natural language summary for the assistant's turn to avoid confusing mem0's internal LLM.
+                    # Create a natural language summary for the assistant's turn
                     if tool_name == 'speak_response':
-                        # For direct speech, the assistant's message is the memory.
                         summary = assistant_response
                     else:
-                        # For tool calls, create a descriptive summary.
                         summary = f"In response to the user, I executed the '{tool_name}' tool. The result was: {assistant_response}"
-
+ 
                     messages = [
                         {"role": "user", "content": transcript},
                         {"role": "assistant", "content": summary}
                     ]
                     memory_manager.add(messages, user_id=USER_ID, session_id=session_id)
-
+                    
+                    # 3. Add to long-term memory (extract preferences)
+                    # For simplicity, add user transcript to long-term if it contains preferences
+                    if "prefer" in transcript.lower() or "like" in transcript.lower() or "favorite" in transcript.lower():
+                        long_term_messages = [{"role": "user", "content": f"User preference: {transcript}"}]
+                        memory_manager.add(long_term_messages, user_id=USER_ID, session_id=None, infer=True)
+ 
                 # Provide additional feedback based on the tool
                 if execution_result["success"]:
                     if tool_name == "play_music":
