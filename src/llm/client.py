@@ -4,6 +4,7 @@ from typing import Dict, Any, Optional, List
 import json
 import time
 import random
+import re
 
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
@@ -14,6 +15,8 @@ class LiteLLMClient:
         self.provider = settings.litellm_settings.provider
         self.model = settings.litellm_settings.model
         self.api_key = settings.litellm_settings.api_key
+        
+        app_logger.info("LiteLLMClient initialized with model: %s", self.model)
         
         # Retry configuration
         self.max_retries = 3
@@ -88,6 +91,29 @@ class LiteLLMClient:
             app_logger.error(f"LiteLLM API call failed: {type(e).__name__}: {e}")
             raise
 
+    @staticmethod
+    def extract_tool_call_info(tool_call_rsp: str):
+        if '<|tool_calls_section_begin|>' not in tool_call_rsp:
+            return []
+        pattern = r"<\|tool_calls_section_begin\|>(.*?)<\|tool_calls_section_end\|>"
+        tool_calls_sections = re.findall(pattern, tool_call_rsp, re.DOTALL)
+        func_call_pattern = r"<\|tool_calls_section_begin\|>\s*(?P<tool_call_id>[\w\.]+\:\d+)\s*<\|tool_call_argument_begin\|>\s*(?P<function_arguments>.*?)\s*<\|tool_call_end\|>"
+        tool_calls = []
+        for match in re.findall(func_call_pattern, tool_calls_sections[0], re.DOTALL):
+            function_id, function_args = match
+            function_name = function_id.split('.')[1].split(':')[0]
+            tool_calls.append(
+                {
+                    "id": function_id,
+                    "type": "function",
+                    "function": {
+                        "name": function_name,
+                        "arguments": function_args
+                    }
+                }
+            )  
+        return tool_calls
+
     def process_transcript(self, transcript: str, system_prompt: str, tools: List[Dict[str, Any]], memories: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Send transcribed text to an LLM for processing with provided system prompt and tools.
@@ -102,6 +128,7 @@ class LiteLLMClient:
         Returns:
             Dict containing the tool call information or None if processing failed
         """
+        app_logger.info("Entering process_transcript with transcript: %s", transcript[:50])
         if not transcript:
             app_logger.warning("Empty transcript provided to LLM client.")
             return None
@@ -179,6 +206,28 @@ class LiteLLMClient:
                         return self._create_rate_limit_fallback_response()
                 else:
                     app_logger.warning(f"LLM call attempt {attempt + 1}/{self.max_retries} failed: {type(e).__name__}: {e}")
+                    
+                    error_str = str(e).lower()
+                    if 'badrequesterror' in error_str and 'failed_generation' in error_str:
+                        # Extract failed_generation from error message
+                        try:
+                            failed_gen_start = error_str.find('"failed_generation":"') + 21
+                            failed_gen_end = error_str.rfind('"}')
+                            if failed_gen_start > 20 and failed_gen_end > 0:
+                                failed_generation = error_str[failed_gen_start:failed_gen_end].replace('\\', '')
+                                tool_calls = self.extract_tool_call_info(failed_generation)
+                                if tool_calls:
+                                    # Take first tool call
+                                    tc = tool_calls[0]
+                                    arguments = json.loads(tc['function']['arguments'])
+                                    tool_response = {
+                                        "tool_name": tc['function']['name'],
+                                        "parameters": arguments
+                                    }
+                                    app_logger.info(f"Parsed Kimi tool call: {tool_response}")
+                                    return tool_response
+                        except Exception as parse_e:
+                            app_logger.error(f"Failed to parse Kimi failed_generation: {parse_e}")
                 
                 # If this is the last attempt, check if it's a rate limit issue
                 if attempt >= self.max_retries - 1:

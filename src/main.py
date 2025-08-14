@@ -197,7 +197,7 @@ def run_voice_assistant(settings: AppSettings):
                 continue
                 
             app_logger.info(f"📝 User said: '{transcript}'")
-            
+
             # --- Memory Integration ---
             memories_str = "No relevant conversation history."
             if memory_manager.enabled:
@@ -209,9 +209,14 @@ def run_voice_assistant(settings: AppSettings):
                     app_logger.info(f"Found {len(relevant_memories)} relevant memories.")
 
             # Process transcript with LLM to determine which tool to call
+
+            app_logger.info("Calling process_transcript on %s", type(llm_client).__name__)
+
             tool_call = llm_client.process_transcript(transcript, system_prompt, available_tools, memories=memories_str)
             
             # Handle the tool call result
+            execution_result = None
+            assistant_summary = "Understood."
             if tool_call:
                 tool_name = tool_call.get("tool_name")
                 parameters = tool_call.get("parameters", {})
@@ -229,31 +234,9 @@ def run_voice_assistant(settings: AppSettings):
                     original_transcript=transcript
                 )
                 
-                # --- Memory Integration ---
-                if memory_manager.enabled:
-                    # 2. Add to session memory
-                    assistant_response = execution_result.get('feedback', 'OK.')
-                    
-                    # Create a natural language summary for the assistant's turn
-                    if tool_name == 'speak_response':
-                        summary = assistant_response
-                    else:
-                        summary = f"In response to the user, I executed the '{tool_name}' tool. The result was: {assistant_response}"
- 
-                    messages = [
-                        {"role": "user", "content": transcript},
-                        {"role": "assistant", "content": summary}
-                    ]
-                    memory_manager.add(messages, user_id=USER_ID, session_id=session_id)
-                    
-                    # 3. Add to long-term memory (extract preferences)
-                    # For simplicity, add user transcript to long-term if it contains preferences
-                    if "prefer" in transcript.lower() or "like" in transcript.lower() or "favorite" in transcript.lower():
-                        long_term_messages = [{"role": "user", "content": f"User preference: {transcript}"}]
-                        memory_manager.add(long_term_messages, user_id=USER_ID, session_id=None, infer=True)
- 
-                # Provide additional feedback based on the tool
                 if execution_result["success"]:
+                    assistant_summary = execution_result.get('feedback', 'OK.')
+                    # Provide additional feedback based on the tool
                     if tool_name == "play_music":
                         app_logger.info("🎵 Music control command executed")
                     elif tool_name == "music_control":
@@ -267,11 +250,26 @@ def run_voice_assistant(settings: AppSettings):
                     elif tool_name == "unknown_request":
                         app_logger.info("❓ Unknown request handled")
                 else:
+                    assistant_summary = f"Failed: {execution_result.get('feedback', 'Error')}"
                     app_logger.error("❌ Command execution failed")
                     
             else:
                 app_logger.warning("No tool call was generated from the transcript.")
                 
+            # --- Memory Integration ---
+            if memory_manager.enabled:
+                # Always add to session memory
+                messages = [
+                    {"role": "user", "content": transcript},
+                    {"role": "assistant", "content": assistant_summary}
+                ]
+                memory_manager.add(messages, user_id=USER_ID, session_id=session_id, infer=False)
+                
+                # Add to long-term memory if contains preferences
+                if any(word in transcript.lower() for word in ["prefer", "like", "favorite"]):
+                    long_term_messages = [{"role": "user", "content": f"User preference: {transcript}"}]
+                    memory_manager.add(long_term_messages, user_id=USER_ID, session_id=None, infer=True)
+
             # Small delay before starting to listen for wake word again
             app_logger.info("⏳ Ready for next command...")
             time.sleep(0.5)

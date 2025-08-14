@@ -18,7 +18,7 @@ from datetime import datetime
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
 from src.tools.music_controller_api import YouTubeMusicAPIController
-    from ..memory.memory_manager import MemoryManager
+from ..memory.memory_manager import MemoryManager
 from .utils import run_ahk_script
 
 class ToolExecutionError(Exception):
