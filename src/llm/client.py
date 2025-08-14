@@ -97,7 +97,7 @@ class LiteLLMClient:
             return []
         pattern = r"<\|tool_calls_section_begin\|>(.*?)<\|tool_calls_section_end\|>"
         tool_calls_sections = re.findall(pattern, tool_call_rsp, re.DOTALL)
-        func_call_pattern = r"<\|tool_calls_section_begin\|>\s*(?P<tool_call_id>[\w\.]+\:\d+)\s*<\|tool_call_argument_begin\|>\s*(?P<function_arguments>.*?)\s*<\|tool_call_end\|>"
+        func_call_pattern = r"(?P<tool_call_id>[\w\.]+\:\d+)\s*<\|tool_call_argument_begin\|>\s*(?P<function_arguments>.*?)\s*<\|tool_call_end\|>"
         tool_calls = []
         for match in re.findall(func_call_pattern, tool_calls_sections[0], re.DOTALL):
             function_id, function_args = match
