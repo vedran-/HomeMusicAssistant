@@ -150,6 +150,8 @@ def run_voice_assistant(settings: AppSettings):
     SESSION_TIMEOUT_MINUTES = 10
     last_interaction_time: Optional[datetime] = None
     session_id: str = str(uuid.uuid4())
+    # In-memory short-term conversation buffer: list of {timestamp, role, content}
+    conversation_history: list[Dict[str, Any]] = []
 
     if True:
     # Main loop
@@ -185,6 +187,8 @@ def run_voice_assistant(settings: AppSettings):
             if last_interaction_time and (datetime.now() - last_interaction_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
                 session_id = str(uuid.uuid4())
                 app_logger.info(f"New session started with ID: {session_id}")
+                # Reset short-term conversation buffer on new session
+                conversation_history.clear()
             last_interaction_time = datetime.now()
 
             # Gradually restore volume after audio capture
@@ -199,14 +203,22 @@ def run_voice_assistant(settings: AppSettings):
             app_logger.info(f"📝 User said: '{transcript}'")
 
             # --- Memory Integration ---
-            memories_str = "No relevant conversation history."
+            # 1) Short-term: use in-memory conversation history (recent exchanges only)
+            recent_items = conversation_history[-10:]  # keep last 10 entries for prompt brevity
+            recent_history_str = "\n".join(
+                f"[{item['timestamp']}] {item['role']}: {item['content']}" for item in recent_items
+            ) if recent_items else "(no recent messages)"
+
+            # 2) Long-term: search mem0 for globally relevant facts (session-agnostic)
+            long_term_str = "(no long-term facts)"
             if memory_manager.enabled:
-                # 1. Search for relevant memories
-                relevant_memories = memory_manager.search(query=transcript, user_id=USER_ID, session_id=session_id)
+                relevant_memories = memory_manager.search(query=transcript, user_id=USER_ID, session_id=None)
                 if relevant_memories:
-                    # Format memories for the prompt
-                    memories_str = "\n".join(f"- {m['memory']}" for m in relevant_memories)
-                    app_logger.info(f"Found {len(relevant_memories)} relevant memories.")
+                    long_term_str = "\n".join(f"- {m['memory']}" for m in relevant_memories)
+                    app_logger.info(f"Found {len(relevant_memories)} relevant long-term memories.")
+
+            # Combine into one context string for the LLM
+            memories_str = f"Recent conversation:\n{recent_history_str}\n\nLong-term facts:\n{long_term_str}"
 
             # Process transcript with LLM to determine which tool to call
 
@@ -257,18 +269,30 @@ def run_voice_assistant(settings: AppSettings):
                 app_logger.warning("No tool call was generated from the transcript.")
                 
             # --- Memory Integration ---
+            # Update short-term in-memory buffer
+            conversation_history.append({
+                "timestamp": datetime.now().strftime('%H:%M:%S'),
+                "role": "user",
+                "content": transcript
+            })
+            conversation_history.append({
+                "timestamp": datetime.now().strftime('%H:%M:%S'),
+                "role": "assistant",
+                "content": assistant_summary
+            })
+
+            # Add to long-term memory via mem0 (session-agnostic). Let mem0 infer importance.
             if memory_manager.enabled:
-                # Always add to session memory
-                messages = [
-                    {"role": "user", "content": transcript},
-                    {"role": "assistant", "content": assistant_summary}
-                ]
-                memory_manager.add(messages, user_id=USER_ID, session_id=session_id, infer=False)
-                
-                # Add to long-term memory if contains preferences
-                if any(word in transcript.lower() for word in ["prefer", "like", "favorite"]):
-                    long_term_messages = [{"role": "user", "content": f"User preference: {transcript}"}]
-                    memory_manager.add(long_term_messages, user_id=USER_ID, session_id=None, infer=True)
+                try:
+                    memory_manager.add(
+                        messages=[{"role": "user", "content": transcript}],
+                        user_id=USER_ID,
+                        session_id=None,
+                        infer=True
+                    )
+                except Exception:
+                    # Already logged inside memory manager
+                    pass
 
             # Small delay before starting to listen for wake word again
             app_logger.info("⏳ Ready for next command...")

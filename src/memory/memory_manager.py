@@ -16,7 +16,8 @@ class MemoryManager:
                     mem0_config_dict = config.dict(exclude_unset=True)
 
                 # Handle data path specifically for the vector store
-                data_path = mem0_config_dict.pop("data_path", None)
+                # Always honor the configured default, even if excluded by model_dump(exclude_unset=True)
+                data_path = getattr(config, 'data_path', None) or mem0_config_dict.pop("data_path", None)
                 if data_path:
                     # mem0 expects the path inside the vector_store config
                     if 'vector_store' not in mem0_config_dict:
@@ -64,18 +65,19 @@ class MemoryManager:
             return []
             
         try:
-            filters = {"session_id": session_id} if session_id else {}
-            session_memories = self.mem0.search(
-                query=query, 
-                user_id=user_id, 
+            # For robust recall of long-term facts across restarts, perform a global search
+            # regardless of the current session. Short-term context is now handled in-memory.
+            global_memories = self.mem0.search(
+                query=query,
+                user_id=user_id,
                 limit=limit,
-                filters=filters
+                filters={}
             )
-            app_logger.info(f"Raw search results for query '{query}': {session_memories}")
-            app_logger.debug(f"Found {len(session_memories.get('results', []))} memories for user '{user_id}' {'in session ' + session_id if session_id else 'as long-term'}.")
-            if session_memories.get('results'):
-                app_logger.debug(f"Retrieved memories: {session_memories['results']}")
-            results = [r for r in session_memories.get('results', []) if r.get('score', 0) > 0.5]
+            app_logger.info(f"Raw search results for query '{query}': {global_memories}")
+            app_logger.debug(f"Found {len(global_memories.get('results', []))} long-term memories for user '{user_id}'.")
+            if global_memories.get('results'):
+                app_logger.debug(f"Retrieved memories: {global_memories['results']}")
+            results = [r for r in global_memories.get('results', []) if r.get('score', 0) > 0.5]
             return results
         except Exception as e:
             app_logger.error("Failed to search memory for user '{}': {}", user_id, e, exc_info=True)
