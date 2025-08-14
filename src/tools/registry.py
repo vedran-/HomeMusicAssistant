@@ -18,6 +18,7 @@ from datetime import datetime
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
 from src.tools.music_controller_api import YouTubeMusicAPIController
+    from ..memory.memory_manager import MemoryManager
 from .utils import run_ahk_script
 
 class ToolExecutionError(Exception):
@@ -49,12 +50,16 @@ class ToolRegistry:
         app_logger.info(f"AutoHotkey: {self.autohotkey_exe}")
         app_logger.info(f"Scripts directory: {self.scripts_dir}")
 
-    def execute_tool_call(self, tool_call: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_tool_call(self, tool_call: Dict[str, Any], memory_manager: Optional[MemoryManager] = None, user_id: Optional[str] = None, session_id: Optional[str] = None, original_transcript: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute a tool call from the LLM.
         
         Args:
             tool_call: Dict with 'tool_name' and 'parameters' keys
+            memory_manager: Optional instance of MemoryManager for special commands.
+            user_id: Optional user ID for memory operations.
+            session_id: Optional session ID for memory operations.
+            original_transcript: The original user transcript.
             
         Returns:
             Dict with execution results including success status, output, and feedback
@@ -64,6 +69,26 @@ class ToolRegistry:
         """
         tool_name = tool_call.get("tool_name")
         parameters = tool_call.get("parameters", {})
+        
+        # --- Handle Special Internal Commands ---
+        if original_transcript:
+            transcript_lower = original_transcript.lower().strip()
+            forget_phrases = ["forget our conversation", "forget this conversation", "clear our chat", "reset our conversation"]
+            if any(phrase in transcript_lower for phrase in forget_phrases):
+                if memory_manager and user_id and session_id:
+                    app_logger.info("User requested to forget the conversation. Clearing session memory.")
+                    memory_manager.clear_session(user_id=user_id, session_id=session_id)
+                    return {
+                        "success": True,
+                        "feedback": "Okay, I've cleared our recent conversation.",
+                        "output": "Session memory cleared."
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "feedback": "I can't clear our conversation right now due to a configuration issue.",
+                        "error": "Memory manager not available."
+                    }
         
         app_logger.info(f"Executing tool: {tool_name} with parameters: {parameters}")
         
@@ -368,7 +393,8 @@ class ToolRegistry:
         return {
             "success": True,  # This is "successful" handling of an unknown request
             "output": reason,
-            "feedback": f"I'm sorry, I can't help with that. {reason}"
+            # Intentionally leave feedback empty so the TTS system remains silent
+            "feedback": ""
         }
 
     def _execute_speak_response(self, parameters: Dict[str, Any]) -> Dict[str, Any]:

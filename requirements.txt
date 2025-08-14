@@ -8,4 +8,5 @@ groq
 audioplayer
 pycaw
 comtypes
-numpy 
+numpy
+mem0ai

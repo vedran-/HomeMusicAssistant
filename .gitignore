@@ -1,5 +1,6 @@
 /.venv
 /config.json
+/.memory
 __pycache__
 *.pyc
 config - Copy.json

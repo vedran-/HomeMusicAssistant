@@ -88,7 +88,7 @@ class LiteLLMClient:
             app_logger.error(f"LiteLLM API call failed: {type(e).__name__}: {e}")
             raise
 
-    def process_transcript(self, transcript: str, system_prompt: str, tools: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    def process_transcript(self, transcript: str, system_prompt: str, tools: List[Dict[str, Any]], memories: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Send transcribed text to an LLM for processing with provided system prompt and tools.
         Includes retry logic for robustness.
@@ -97,6 +97,7 @@ class LiteLLMClient:
             transcript: The transcribed text from the user's speech
             system_prompt: System prompt that instructs the LLM on its role
             tools: List of tool definitions that the LLM can use in its response
+            memories: Optional string containing relevant past conversation snippets.
             
         Returns:
             Dict containing the tool call information or None if processing failed
@@ -104,10 +105,13 @@ class LiteLLMClient:
         if not transcript:
             app_logger.warning("Empty transcript provided to LLM client.")
             return None
+        
+        # Format the system prompt with memories if they exist
+        final_system_prompt = system_prompt.format(memories=memories or "No relevant conversation history.")
             
         # Prepare messages for the LLM
         messages = [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": final_system_prompt},
             {"role": "user", "content": transcript}
         ]
         
@@ -182,7 +186,7 @@ class LiteLLMClient:
                         app_logger.info("Final attempt failed due to rate limiting. Returning fallback response.")
                         return self._create_rate_limit_fallback_response()
                     else:
-                        app_logger.error(f"All {self.max_retries} LLM call attempts failed. Last error: {e}", exc_info=True)
+                        app_logger.error(f"All {self.max_retries} LLM call attempts failed. Last error:", exc_info=True)
                         break
                 
                 # Calculate delay for next attempt
@@ -194,7 +198,7 @@ class LiteLLMClient:
                 time.sleep(delay)
         
         # If we get here, all retries failed
-        app_logger.error(f"Failed to process transcript after {self.max_retries} attempts. Final error: {last_exception}")
+        app_logger.error(f"Failed to process transcript after {self.max_retries} attempts.", exc_info=True)
         return None
 
 
