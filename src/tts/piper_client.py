@@ -161,7 +161,13 @@ class PiperTTSClient:
                     '--output-file', temp_path
                 ]
                 
-                result = subprocess.run(cmd, input=text, text=True, capture_output=True)
+                result = subprocess.run(
+                    cmd, 
+                    input=text, 
+                    encoding='utf-8',
+                    errors='replace',
+                    capture_output=True
+                )
                 
                 if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
                     player = AudioPlayer(temp_path)
