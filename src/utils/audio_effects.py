@@ -48,6 +48,20 @@ def play_sound_effect_async(sound_file_path: str, volume: float = 0.7) -> None:
     sound_thread = threading.Thread(target=_play_sound, daemon=True)
     sound_thread.start()
 
+def get_audio_dir(audio_dir: Optional[str] = None) -> Path:
+    """
+    Returns the directory containing audio files.
+    
+    Args:
+        audio_dir: Optional[str] - If specified, use this as the audio directory.
+    Returns:
+        Path to the audio directory.
+    """
+    if audio_dir is None:
+        # Default path relative to the project structure
+        return Path(__file__).parent.parent / "audio"
+    return Path(audio_dir)
+
 def play_wake_word_accepted_sound(audio_dir: Optional[str] = None) -> None:
     """
     Play the wake word accepted sound effect.
@@ -55,14 +69,20 @@ def play_wake_word_accepted_sound(audio_dir: Optional[str] = None) -> None:
     Args:
         audio_dir: Directory containing the audio files. If None, uses default path.
     """
-    if audio_dir is None:
-        # Default path relative to the project structure
-        current_dir = Path(__file__).parent.parent
-        audio_dir = current_dir / "audio"
-    else:
-        audio_dir = Path(audio_dir)
-    
-    sound_file = audio_dir / "WakeWordAccepted.mp3"
-    
+    audio_dir_path = get_audio_dir(audio_dir)
+    sound_file = audio_dir_path / "WakeWordAccepted.mp3"
     app_logger.debug("Playing wake word accepted sound effect")
-    play_sound_effect_async(str(sound_file), volume=0.5) 
+    play_sound_effect_async(str(sound_file), volume=0.5)
+
+def play_vision_started_sound(audio_dir: Optional[str] = None) -> None:
+    """
+    Play the vision started sound effect (when vision/screenshot analysis begins).
+    
+    Args:
+        audio_dir: Directory containing the audio files. If None, uses default path.
+    """
+    return # Do not play vision started sound effect
+    audio_dir_path = get_audio_dir(audio_dir)
+    sound_file = audio_dir_path / "VisionStarted.mp3"
+    app_logger.debug("Playing vision started sound effect")
+    play_sound_effect_async(str(sound_file), volume=0.5)
