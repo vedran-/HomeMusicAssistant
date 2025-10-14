@@ -93,8 +93,6 @@ Examples:
 - If user says "reduce volume to half" → call control_volume with action="down", amount=50
 - If user says "set volume to exactly 50" → call control_volume with action="set", amount=50
 - If user says "make volume exactly 75%" → call control_volume with action="set", amount=75
-- If user says "put the computer to sleep" → call system_control with action="sleep"
-- If user says "restart the computer" → call system_control with action="restart"
 - If user says "what is the capital of France" → call speak_response with message="Paris"
 - If user says "what's 25 plus 17" → call speak_response with message="42"
 - If user says "how many days in a year" → call speak_response with message="365 days, or 366 in a leap year"
@@ -251,24 +249,6 @@ def get_available_tools() -> List[Dict[str, Any]]:
                             "description": "For 'up'/'down': amount to change volume BY (1-100). For 'set': absolute volume level to set TO (0-100). Not used for mute/unmute.",
                             "minimum": 0,
                             "maximum": 100
-                        }
-                    },
-                    "required": ["action"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "system_control",
-                "description": "Control system functions like sleep, shutdown, or restart",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "action": {
-                            "type": "string",
-                            "enum": ["sleep", "shutdown", "restart"],
-                            "description": "The system action to perform"
                         }
                     },
                     "required": ["action"]
