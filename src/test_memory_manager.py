@@ -3,6 +3,7 @@ import os
 import shutil
 from src.config.settings import load_settings
 from src.memory.memory_manager import MemoryManager
+from src.utils.ollama_manager import OllamaManager
 
 class TestMemoryManager(unittest.TestCase):
     @classmethod
@@ -19,7 +20,15 @@ class TestMemoryManager(unittest.TestCase):
             raise unittest.SkipTest("Mem0 config not found, skipping memory manager tests.")
         cls.settings.mem0_config.data_path = cls.test_memory_dir
         
-        cls.memory_manager = MemoryManager(cls.settings.mem0_config)
+        # Initialize OllamaManager for testing
+        try:
+            cls.ollama_manager = OllamaManager(idle_timeout_seconds=180)
+            print("✅ OllamaManager initialized for testing")
+        except Exception as e:
+            print(f"⚠️ OllamaManager initialization failed: {e}")
+            cls.ollama_manager = None
+        
+        cls.memory_manager = MemoryManager(cls.settings.mem0_config, ollama_manager=cls.ollama_manager)
         cls.user_id = "test_user"
         cls.session_id1 = "test_session_123"
         cls.session_id2 = "test_session_456"
@@ -128,5 +137,6 @@ class TestMemoryManager(unittest.TestCase):
 
 if __name__ == '__main__':
     print("Running MemoryManager tests...")
-    print("Ensure your configured embedder service (e.g., LM Studio) is running.")
+    print("Ollama will be automatically started if needed.")
+    print("Note: First run will download the embedding model (~274MB).")
     unittest.main()

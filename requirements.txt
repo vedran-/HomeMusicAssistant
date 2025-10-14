@@ -10,3 +10,5 @@ pycaw
 comtypes
 numpy
 mem0ai
+ollama
+psutil

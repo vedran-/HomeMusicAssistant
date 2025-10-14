@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 
 from src.config.settings import load_settings, AppSettings
 from src.utils.logger import app_logger, configure_logging
+from src.utils.ollama_manager import OllamaManager
 from src.audio.wake_word import WakeWordDetector
 from src.audio.capture import AudioCapturer
 from src.transcription.groq_client import GroqTranscriber
@@ -45,7 +46,17 @@ def initialize_components(settings: AppSettings):
     transcriber = GroqTranscriber(settings)
     llm_client = LiteLLMClient(settings)
     tool_registry = ToolRegistry(settings)
-    memory_manager = MemoryManager(settings.mem0_config, app_settings=settings)
+    
+    # Initialize Ollama manager for automatic lifecycle management
+    ollama_manager = None
+    try:
+        ollama_manager = OllamaManager(idle_timeout_seconds=180)  # 3 minutes idle timeout
+        app_logger.info("✅ OllamaManager initialized successfully")
+    except Exception as e:
+        app_logger.warning(f"⚠️ OllamaManager initialization failed: {e}")
+        app_logger.warning("Memory features will work with limited functionality (no semantic search)")
+    
+    memory_manager = MemoryManager(settings.mem0_config, app_settings=settings, ollama_manager=ollama_manager)
     
     # Log available microphones for user reference
     audio_capturer.list_available_microphones()

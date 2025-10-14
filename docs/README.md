@@ -27,6 +27,7 @@ The Home Assistant voice control system is designed to run on a local machine an
 - Internet connection for cloud services (Groq, LiteLLM)
 - AutoHotkey v2 (for tool execution)
 - Piper TTS executable (for voice responses)
+- **Ollama** (for local memory/embeddings) - Download from [ollama.com](https://ollama.com/download)
 
 ### Setup
 
@@ -95,6 +96,50 @@ The system uses a `config.json` file based on `config.template.json`. Key config
 - **sample_rate**: Audio sample rate for TTS (default: 22050)
 - **use_cuda**: Enable CUDA acceleration if available (default: true)
 - **speak_responses**: Whether to speak LLM responses and tool feedback (default: true)
+
+### Memory Configuration (NEW)
+
+The system now features intelligent long-term memory powered by **Ollama** for fully local semantic search. Memory enables the assistant to:
+- Remember your preferences and past conversations
+- Provide personalized responses based on history
+- Learn from interactions over time
+
+**Prerequisites:**
+- **Ollama**: Download and install from [ollama.com](https://ollama.com/download)
+  - The system will automatically start/stop Ollama as needed
+  - No manual management required!
+
+**Configuration:**
+```json
+"memory_config": {
+  "data_path": "./.memory",
+  "llm_provider": "litellm",
+  "llm_model": "groq/moonshotai/kimi-k2-instruct",
+  "llm_api_key": "YOUR_GROQ_API_KEY",
+  "embedder_provider": "ollama",
+  "embedder_model": "nomic-embed-text",
+  "embedder_api_key": null,
+  "vector_store_provider": "qdrant",
+  "vector_store_embedding_model_dims": 768
+}
+```
+
+**Key Features:**
+- ✅ **Fully Local**: All embeddings generated locally via Ollama (no cloud APIs)
+- ✅ **Auto-Managed**: Ollama starts on-demand and stops after 3 minutes of inactivity
+- ✅ **Zero Setup**: Embedding model (~274MB) downloads automatically on first use
+- ✅ **Semantic Search**: Understands meaning, not just keywords
+- ✅ **Efficient**: Minimal resource usage with smart lifecycle management
+
+**First Run:**
+- On first memory operation, the system will download the `nomic-embed-text` model (~274MB)
+- This is a one-time download that takes 1-2 minutes
+- Subsequent operations are fast (<100ms per embedding)
+
+**Optional - Pre-download Model:**
+```bash
+ollama pull nomic-embed-text
+```
 
 ### Audio Settings
 

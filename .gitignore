@@ -7,3 +7,4 @@ config - Copy.json
 /src/tools/*_log.txt
 /tools/piper
 /test_memory_data
+/data/todos

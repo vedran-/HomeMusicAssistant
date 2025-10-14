@@ -2,15 +2,22 @@ from mem0 import Memory
 from typing import List, Dict, Any, Optional
 from ..config.settings import Mem0Config, AppSettings
 from ..utils.logger import app_logger
+from ..utils.ollama_manager import OllamaManager
 import os
 
 class MemoryManager:
-    def __init__(self, config: Optional[Mem0Config], app_settings: Optional[AppSettings] = None):
+    def __init__(self, config: Optional[Mem0Config], app_settings: Optional[AppSettings] = None, ollama_manager: Optional[OllamaManager] = None):
         """Initialize MemoryManager.
 
         If app_settings.memory_config is provided (from config.json), build a mem0 config from it.
         Otherwise, fall back to provided Mem0Config (if any).
+        
+        Args:
+            config: Mem0Config object (legacy)
+            app_settings: AppSettings with memory_config
+            ollama_manager: OllamaManager for automatic Ollama lifecycle management
         """
+        self.ollama_manager = ollama_manager
         # Build mem0_config_dict either from simplified memory_config or from Mem0Config
         mem0_config_dict: Optional[Dict[str, Any]] = None
         if app_settings and getattr(app_settings, 'memory_config', None):
@@ -119,6 +126,14 @@ class MemoryManager:
         if not self.enabled:
             return
 
+        # Ensure Ollama is running before memory operations
+        if self.ollama_manager:
+            try:
+                self.ollama_manager.ensure_running()
+            except Exception as e:
+                app_logger.error(f"Failed to start Ollama for memory operation: {e}")
+                return
+
         try:
             metadata: Dict[str, Any] = {"type": "long_term"}
             if session_id:
@@ -150,12 +165,24 @@ class MemoryManager:
                 verify_payload = self.mem0.get_all(user_id=user_id)
             app_logger.info(f"Successfully added memory for user '{user_id}' {'in session ' + session_id if session_id else 'as long-term'}. Response: {verify_payload}")
             app_logger.debug(f"Added conversation to memory for user '{user_id}' {'in session ' + session_id if session_id else 'as long-term'}.")
+            
+            # Mark activity after successful memory operation
+            if self.ollama_manager:
+                self.ollama_manager.mark_activity()
         except Exception as e:
             app_logger.error("Failed to add memory for user '{}': {}", user_id, e, exc_info=True)
 
     def search(self, query: str, user_id: str, session_id: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
         if not self.enabled:
             return []
+        
+        # Ensure Ollama is running before memory operations
+        if self.ollama_manager:
+            try:
+                self.ollama_manager.ensure_running()
+            except Exception as e:
+                app_logger.error(f"Failed to start Ollama for memory search: {e}")
+                return []
             
         try:
             # For robust recall of long-term facts across restarts, perform a global search
@@ -202,6 +229,10 @@ class MemoryManager:
                 except Exception as fe:
                     app_logger.warning(f"Fallback memory scan failed: {fe}")
 
+            # Mark activity after successful search
+            if self.ollama_manager and results:
+                self.ollama_manager.mark_activity()
+                
             return results
         except Exception as e:
             app_logger.error("Failed to search memory for user '{}': {}", user_id, e, exc_info=True)
@@ -243,3 +274,10 @@ class MemoryManager:
                 app_logger.info("Closed mem0 vector store connection.")
         except Exception as e:
             app_logger.error(f"Failed to close mem0 vector store: {e}", exc_info=True)
+        
+        # Stop Ollama manager if present
+        if self.ollama_manager:
+            try:
+                self.ollama_manager.stop()
+            except Exception as e:
+                app_logger.error(f"Failed to stop Ollama manager: {e}", exc_info=True)
