@@ -255,9 +255,12 @@ class WakeWordDetector:
                 
                 audio_chunk = self.stream.read(self.chunk_size, exception_on_overflow=False)
                 
+                skip_prediction = False
                 if self.chunks_to_skip > 0:
                     self.chunks_to_skip -= 1
-                    continue
+                    # Silence the audio chunk
+                    audio_chunk = b'\x00' * len(audio_chunk)
+                    skip_prediction = True
                 
                 # Convert the audio bytes to the right format
                 audio_np = np.frombuffer(audio_chunk, dtype=np.int16)
@@ -266,7 +269,7 @@ class WakeWordDetector:
                 prediction = self.oww.predict(audio_np)
 
                 # Get prediction for the active model
-                if self.active_model in prediction and prediction[self.active_model] > self.sensitivity:
+                if not skip_prediction and self.active_model in prediction and prediction[self.active_model] > self.sensitivity:
                     app_logger.info(f"Wake word '{self.active_model}' detected with score {prediction[self.active_model]:.2f}!")
 
                     self.stop_listening() # Stop microphone listening first
@@ -284,7 +287,7 @@ class WakeWordDetector:
 
                     # Add a longer cooldown period to prevent immediate re-triggering
                     # This gives time for any residual audio/echo to clear
-                    self.chunks_to_skip = 50 # 50 * 80ms = 4000ms cooldown
+                    self.chunks_to_skip = 25 # 25 * 80ms = 2000ms cooldown
 
                     play_wake_word_accepted_sound() # Play sound after stopping other things
                     
