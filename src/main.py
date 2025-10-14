@@ -150,8 +150,8 @@ def run_voice_assistant(settings: AppSettings):
     SESSION_TIMEOUT_MINUTES = 10
     last_interaction_time: Optional[datetime] = None
     session_id: str = str(uuid.uuid4())
-    # In-memory short-term conversation buffer: list of {timestamp, role, content}
-    conversation_history: list[Dict[str, Any]] = []
+    # In-memory short-term conversation buffer: list of plain text lines ("User: ...", "Assistant: ...")
+    conversation_history: list[str] = []
 
     if True:
     # Main loop
@@ -205,9 +205,7 @@ def run_voice_assistant(settings: AppSettings):
             # --- Memory Integration ---
             # 1) Short-term: use in-memory conversation history (recent exchanges only)
             recent_items = conversation_history[-10:]  # keep last 10 entries for prompt brevity
-            recent_history_str = "\n".join(
-                f"[{item['timestamp']}] {item['role']}: {item['content']}" for item in recent_items
-            ) if recent_items else "(no recent messages)"
+            recent_history_str = "\n".join(recent_items) if recent_items else "(no recent messages)"
 
             # 2) Long-term: search mem0 for globally relevant facts (session-agnostic)
             long_term_str = "(no long-term facts)"
@@ -269,21 +267,30 @@ def run_voice_assistant(settings: AppSettings):
                 app_logger.warning("No tool call was generated from the transcript.")
                 
             # --- Memory Integration ---
-            # Update short-term in-memory buffer
-            conversation_history.append({
-                "timestamp": datetime.now().strftime('%H:%M:%S'),
-                "role": "user",
-                "content": transcript
-            })
-            conversation_history.append({
-                "timestamp": datetime.now().strftime('%H:%M:%S'),
-                "role": "assistant",
-                "content": assistant_summary
-            })
+            # Update short-term in-memory buffer with plain text lines
+            conversation_history.append(f"User: {transcript}")
+            conversation_history.append(f"Assistant: {assistant_summary}")
 
-            # Add to long-term memory via mem0 (session-agnostic). Let mem0 infer importance.
+            # Add to long-term memory via mem0 (session-agnostic).
             if memory_manager.enabled:
                 try:
+                    lower_t = transcript.lower().strip()
+                    preference_markers = [
+                        "my favorite", "i prefer", "i like", "i love", "i hate",
+                        "call me", "my name is", "i usually", "i often"
+                    ]
+                    is_potential_long_term = any(marker in lower_t for marker in preference_markers)
+
+                    if is_potential_long_term:
+                        normalized = f"User preference: {transcript}"
+                        memory_manager.add(
+                            messages=[{"role": "user", "content": normalized}],
+                            user_id=USER_ID,
+                            session_id=None,
+                            infer=False
+                        )
+
+                    # Also attempt mem0's own extraction pipeline
                     memory_manager.add(
                         messages=[{"role": "user", "content": transcript}],
                         user_id=USER_ID,

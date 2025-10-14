@@ -151,6 +151,9 @@ def load_settings(config_path: str = "config.json") -> AppSettings:
         litellm_conf = config_data['litellm_settings']
         if litellm_conf.get('model'):
             model_name = litellm_conf.get("model")
+            # Prefer a cloud embedder if available to avoid requiring LM Studio
+            prefer_gemini = bool(config_data.get('google_api_key'))
+            embedder_provider = 'gemini' if prefer_gemini else 'lmstudio'
             config_data['mem0_config'] = {
                 "enabled": True,
                 "llm": {
@@ -160,7 +163,7 @@ def load_settings(config_path: str = "config.json") -> AppSettings:
                     }
                 },
                 "embedder": {
-                    "provider": "lmstudio"
+                    "provider": embedder_provider
                 },
                 "vector_store": {
                     "provider": "qdrant",
