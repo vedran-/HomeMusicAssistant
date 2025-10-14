@@ -15,8 +15,8 @@ class WakeWordDetector:
         self.settings = settings
         self.tts_client = tts_client
         
-        # Initialize power manager for cross-platform sleep control
-        self.power_manager = CrossPlatformPowerManager()
+        # Initialize power manager for cross-platform sleep control (pass settings for diagnostics/overrides)
+        self.power_manager = CrossPlatformPowerManager(settings)
         
         # Limit to only supported wake word models - alexa first as default
         self.supported_models = ["alexa", "hey_jarvis"]
@@ -199,6 +199,8 @@ class WakeWordDetector:
                 frames_per_buffer=self.chunk_size,
                 input_device_index=self.input_device_index
             )
+            # Re-apply allow after stream opens to mitigate race conditions
+            self.power_manager.allow_system_sleep()
             app_logger.info(f"Listening for wake word '{self.active_model}'...")
 
             while True:

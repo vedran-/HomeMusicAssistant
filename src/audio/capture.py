@@ -7,6 +7,7 @@ import tempfile
 from typing import Optional, List, Dict
 
 from src.config.settings import AppSettings
+from src.utils.power_management import CrossPlatformPowerManager
 from src.utils.logger import app_logger
 
 class AudioCapturer:
@@ -35,6 +36,11 @@ class AudioCapturer:
             self.input_device_index = self.settings.audio_settings.input_device_index
             
         self._validate_input_device()
+        # Power manager (optional allow during capture based on settings.power)
+        try:
+            self.power_manager = CrossPlatformPowerManager(settings)
+        except Exception:
+            self.power_manager = None
 
     def _find_device_by_keyword(self):
         """Find a microphone device by matching the keyword in its name."""
@@ -125,6 +131,9 @@ class AudioCapturer:
 
     def capture_audio_after_wake(self, output_filename_base: str = "captured_audio") -> Optional[str]:
         app_logger.info("Wake word detected. Starting audio capture...")
+        # Optionally allow sleep during capture too, controlled by config
+        if getattr(getattr(self.settings, 'power', None), 'allow_sleep_during_capture', False) and self.power_manager:
+            self.power_manager.allow_system_sleep()
         
         stream = None
         try:
@@ -136,6 +145,9 @@ class AudioCapturer:
                 frames_per_buffer=self.chunk_size,
                 input_device_index=self.input_device_index
             )
+            if getattr(getattr(self.settings, 'power', None), 'allow_sleep_during_capture', False) and self.power_manager:
+                # Re-apply allow after stream opens
+                self.power_manager.allow_system_sleep()
         except Exception as e:
             app_logger.error(f"Failed to open audio stream: {e}", exc_info=True)
             return None
@@ -211,6 +223,9 @@ class AudioCapturer:
                 stream.close()
             except Exception as e:
                 app_logger.error(f"Error closing audio stream: {e}", exc_info=True)
+        # Reset power state after capture ends
+        if self.power_manager:
+            self.power_manager.reset_power_state()
         
         if not frames:
             app_logger.warning("No audio was recorded.")

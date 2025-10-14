@@ -1,7 +1,15 @@
 import ctypes
 import platform
+import subprocess
+import sys
+from typing import Optional, List, Tuple
 from src.utils.logger import app_logger
-from typing import Optional
+
+try:
+    # Settings are optional at import time to avoid circulars in some contexts
+    from src.config.settings import PowerSettings
+except Exception:
+    PowerSettings = None  # type: ignore
 
 class WindowsPowerManager:
     """Windows power management utility to control sleep behavior."""
@@ -12,12 +20,107 @@ class WindowsPowerManager:
     ES_DISPLAY_REQUIRED = 0x00000002
     ES_AWAYMODE_REQUIRED = 0x00000040
     
-    def __init__(self):
+    def __init__(self, power_settings: Optional["PowerSettings"] = None):
         self.is_windows = platform.system() == "Windows"
         self.previous_state: Optional[int] = None
+        self.power_settings = power_settings
         
         if not self.is_windows:
             app_logger.warning("PowerManager: Not running on Windows, power management features disabled")
+            return
+
+        # Optionally run diagnostics on startup
+        try:
+            if self.power_settings and getattr(self.power_settings, 'diagnose_on_startup', False):
+                self._diagnose_and_optionally_override()
+        except Exception as e:
+            app_logger.warning(f"PowerManager: Startup diagnostics failed: {e}")
+
+    # --- Diagnostics and Overrides (Windows 10 specific) ---
+    def _is_windows_10(self) -> bool:
+        try:
+            # platform.release() returns '10' for Windows 10, '11' for Windows 11
+            return platform.release() == "10"
+        except Exception:
+            return False
+
+    def _is_elevated(self) -> bool:
+        try:
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except Exception:
+            return False
+
+    def _powercfg_requests(self) -> str:
+        try:
+            completed = subprocess.run(["powercfg", "/requests"], capture_output=True, text=True, shell=False)
+            return (completed.stdout or "") + ("\n" + completed.stderr if completed.stderr else "")
+        except Exception as e:
+            app_logger.warning(f"PowerManager: Failed to run powercfg /requests: {e}")
+            return ""
+
+    def _extract_system_driver_blockers(self, requests_output: str) -> List[str]:
+        lines = requests_output.splitlines()
+        blockers: List[str] = []
+        in_system = False
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                # Blank line resets section
+                in_system = False
+                continue
+            if stripped.upper().endswith(":"):
+                # Section header
+                in_system = stripped.upper().startswith("SYSTEM:")
+                continue
+            if in_system and stripped.lower() != "none.":
+                blockers.append(stripped)
+        return blockers
+
+    def _diagnose_and_optionally_override(self) -> None:
+        if not self.is_windows:
+            return
+        if self.power_settings and getattr(self.power_settings, 'log_power_requests', False):
+            dump = self._powercfg_requests()
+            if dump:
+                app_logger.info("PowerManager: powercfg /requests\n" + dump)
+        if not self._is_windows_10():
+            return
+        output = self._powercfg_requests()
+        if not output:
+            return
+        blockers = self._extract_system_driver_blockers(output)
+        if not blockers:
+            return
+        app_logger.warning("PowerManager: Windows 10 detected driver-level SYSTEM sleep blockers:")
+        for b in blockers:
+            app_logger.warning(f"  - {b}")
+
+        auto_override = bool(self.power_settings and getattr(self.power_settings, 'auto_override_windows10_audio_blockers', False))
+        if not auto_override:
+            # Provide copy-paste suggestions
+            for b in blockers:
+                safe = b.replace('"', "'")
+                app_logger.warning(f"To override: run as Administrator -> powercfg /requestsoverride DRIVER \"{safe}\" SYSTEM")
+            return
+
+        if not self._is_elevated():
+            for b in blockers:
+                safe = b.replace('"', "'")
+                app_logger.warning(f"Admin required to auto-override. Copy/paste: powercfg /requestsoverride DRIVER \"{safe}\" SYSTEM")
+            return
+
+        # Attempt to auto-override each detected blocker
+        for b in blockers:
+            safe = b.replace('"', "'")
+            try:
+                cmd = ["powercfg", "/requestsoverride", "DRIVER", safe, "SYSTEM"]
+                completed = subprocess.run(cmd, capture_output=True, text=True, shell=False)
+                if completed.returncode == 0:
+                    app_logger.info(f"PowerManager: Applied override for DRIVER '{b}' (SYSTEM)")
+                else:
+                    app_logger.warning(f"PowerManager: Failed to apply override for '{b}': {completed.stdout or completed.stderr}")
+            except Exception as e:
+                app_logger.warning(f"PowerManager: Error applying override for '{b}': {e}")
     
     def allow_system_sleep(self) -> bool:
         """
@@ -93,12 +196,18 @@ class WindowsPowerManager:
 class CrossPlatformPowerManager:
     """Cross-platform power management utility."""
     
-    def __init__(self):
+    def __init__(self, settings: Optional[object] = None):
         self.platform = platform.system()
         self.power_manager = None
+        self._power_settings: Optional[PowerSettings] = None
+        try:
+            if settings is not None and hasattr(settings, 'power'):
+                self._power_settings = getattr(settings, 'power')  # type: ignore
+        except Exception:
+            self._power_settings = None
         
         if self.platform == "Windows":
-            self.power_manager = WindowsPowerManager()
+            self.power_manager = WindowsPowerManager(power_settings=self._power_settings)
         elif self.platform == "Darwin":  # macOS
             self.power_manager = MacOSPowerManager()
         elif self.platform == "Linux":
