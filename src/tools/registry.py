@@ -145,7 +145,7 @@ class ToolRegistry:
             elif tool_name == "speak_response":
                 return self._execute_speak_response(parameters)
             elif tool_name == "web_search":
-                return self._execute_web_search(parameters)
+                return self._execute_web_search(parameters, llm_client)
             elif tool_name == "get_song_info":
                 return self._execute_get_song_info(parameters)
             elif tool_name == "add_task":
@@ -906,8 +906,16 @@ ExitApp(0)
         
         return result
 
-    def _execute_web_search(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute web search using Tavily."""
+    def _execute_web_search(self, parameters: Dict[str, Any], llm_client=None) -> Dict[str, Any]:
+        """
+        Execute web search using Tavily with multi-step agentic workflow.
+        
+        This follows the same pattern as screenshot analysis:
+        1. Perform web search
+        2. Get search results
+        3. Call LLM to synthesize answer
+        4. Return answer to be spoken
+        """
         if not self.tavily_manager:
             return {
                 "success": False,
@@ -916,6 +924,8 @@ ExitApp(0)
             }
         
         query = parameters.get("query")
+        user_question = parameters.get("user_question")  # Optional: original user question
+        
         if not query:
             return {
                 "success": False,
@@ -923,14 +933,21 @@ ExitApp(0)
                 "feedback": "I need a search query"
             }
         
-        success, message, results = self.tavily_manager.search(query)
+        # Inject LLM client if available (like screenshot manager)
+        if llm_client:
+            self.tavily_manager.llm_client = llm_client
+        else:
+            app_logger.warning("No LLM client provided for synthesis. Will return raw results.")
+        
+        # Perform multi-step search and answer workflow
+        app_logger.info(f"Executing multi-step web search for: {query}")
+        success, message, answer = self.tavily_manager.search_and_answer(query, user_question)
         
         if success:
             return {
                 "success": True,
-                "output": message,
-                "search_results": results,  # Raw results for LLM to synthesize
-                "feedback": ""  # LLM will use speak_response after synthesizing
+                "output": f"Search completed: {message}. Answer: {answer}",
+                "feedback": answer  # Synthesized answer to be spoken
             }
         else:
             return {

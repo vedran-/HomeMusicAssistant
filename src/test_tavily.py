@@ -173,8 +173,11 @@ def test_registry_integration():
         assert registry.tavily_manager is not None, "Tavily manager should be initialized"
         print("[PASS] Tavily manager initialized in registry")
         
-        # Test 2: Execute web search through registry
-        print("\n[TEST] Test 4b: Execute web search through registry")
+        # Test 2: Execute web search through registry with multi-step workflow
+        print("\n[TEST] Test 4b: Execute web search with LLM synthesis")
+        print("         NOTE: This test requires LLM client for synthesis")
+        print("         Without LLM client, it will return raw results")
+        
         result = registry.execute_tool_call({
             "tool_name": "web_search",
             "parameters": {"query": "capital of France"}
@@ -182,9 +185,12 @@ def test_registry_integration():
         
         assert result is not None, "Result should not be None"
         assert result.get('success') == True, f"Search should succeed: {result.get('error')}"
-        assert 'search_results' in result, "Should have search_results key"
+        assert 'feedback' in result, "Should have feedback key"
         print(f"[PASS] Web search executed through registry successfully")
-        print(f"   Output: {result.get('output')}")
+        if result.get('output'):
+            print(f"   Output: {result.get('output')[:100]}...")
+        if result.get('feedback'):
+            print(f"   Feedback: {result.get('feedback')[:100]}...")
         
         # Test 3: Missing query parameter
         print("\n[TEST] Test 4c: Missing query parameter")

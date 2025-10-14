@@ -64,13 +64,23 @@ Once configured, simply ask questions that require web search:
 - **General Questions**: "What is the capital of Australia?"
 - **Information Lookup**: "Find information about the Eiffel Tower"
 
-### How It Works
+### How It Works (Multi-Step Agentic Workflow)
+
+The web search follows a multi-step agentic pattern similar to screenshot analysis:
 
 1. User asks a question requiring real-time information
-2. The LLM recognizes this and calls the `web_search` tool
-3. Tavily searches the web and returns relevant results
-4. The LLM synthesizes the search results into a brief 1-2 sentence answer
-5. The answer is spoken to the user via TTS
+2. The LLM recognizes this and calls the `web_search` tool with the query
+3. **Tavily searches the web** and returns relevant results (top 5)
+4. **The tool itself calls the LLM** to synthesize the search results into a concise answer
+5. The synthesized answer is returned as feedback
+6. The answer is spoken to the user via TTS
+
+This is a **multi-step workflow** where the tool performs multiple operations:
+- Step 1: Web search (Tavily API)
+- Step 2: Result synthesis (LLM call within the tool)
+- Step 3: Return spoken answer
+
+This pattern ensures the user gets a coherent, synthesized answer rather than raw search results.
 
 ## Testing
 
@@ -102,7 +112,7 @@ The tests cover:
 - `src/test_tavily.py` - Comprehensive test suite
 - `docs/TAVILY_SEARCH.md` - This documentation
 
-### Architecture
+### Architecture (Multi-Step Agentic Workflow)
 
 ```
 User Voice Question
@@ -115,16 +125,30 @@ LLM Processing (recognizes need for web search)
     ↓
 web_search tool called with query
     ↓
-TavilyManager.search() - performs web search
+┌─── TavilyManager Multi-Step Workflow ───┐
+│                                          │
+│  Step 1: Tavily Search API               │
+│    ↓                                     │
+│  Search results (top 5)                  │
+│    ↓                                     │
+│  Step 2: Format results for LLM          │
+│    ↓                                     │
+│  Step 3: Call LLM for synthesis          │
+│    ↓                                     │
+│  Synthesized answer (1-3 sentences)      │
+│                                          │
+└──────────────────────────────────────────┘
     ↓
-Search results returned to LLM
-    ↓
-LLM synthesizes results into brief answer
-    ↓
-speak_response tool called with synthesized answer
+Answer returned as feedback
     ↓
 TTS speaks the answer to user
 ```
+
+**Key Difference from Traditional Tools:**
+- Traditional: Tool returns data → LLM processes → speak_response called
+- Web Search: Tool performs search **AND** synthesis internally → returns ready-to-speak answer
+
+This multi-step agentic pattern is also used by the screenshot analysis tool.
 
 ## Error Handling
 
