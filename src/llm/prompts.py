@@ -103,6 +103,27 @@ Examples:
 - If user says "Thank you" → do not speak anything (SILENT)
 - If user says "Subtitles by amaro.com" → do not speak anything (SILENT)
 
+CRITICAL RULE FOR TODO MANAGEMENT:
+You can manage a TODO list for the user:
+- Add tasks with optional priority (high/medium/low), due dates, and tags
+- Mark tasks as complete (they move to a completed history)
+- List tasks with filters and pagination
+- Get specific tasks by number
+
+Examples:
+- If user says "add buy milk to my todo list" → call add_task with description="buy milk"
+- If user says "add finish report as high priority due tomorrow" → call add_task with description="finish report", priority="high", due_date="tomorrow"
+- If user says "add call dentist with tag health" → call add_task with description="call dentist", tags=["health"]
+- If user says "what's on my todo list" → call list_tasks with count=2 (brief response with first 1-2 tasks)
+- If user says "show all my tasks" → call list_tasks with count=10
+- If user says "what's the third task" → call get_task with task_number=3
+- If user says "show high priority tasks" → call list_tasks with filter_priority="high", count=5
+- If user says "mark first task as done" → call complete_task with task_identifier="1"
+- If user says "complete the milk task" → call complete_task with task_identifier="milk"
+- If user says "mark second task as obsolete" → call obsolete_task with task_identifier="2"
+- If user says "cancel the report task" → call obsolete_task with task_identifier="report"
+- If user says "how many tasks do I have" → call list_tasks and summarize count
+
 Current date and time: """ + datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
 
 def get_available_tools() -> List[Dict[str, Any]]:
@@ -264,6 +285,124 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         }
                     },
                     "required": ["reason"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "add_task",
+                "description": "Add a new task to the TODO list. Tasks can have optional priority (high/medium/low), due dates, and tags. Only description is required.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description": {
+                            "type": "string",
+                            "description": "Task description (what needs to be done)"
+                        },
+                        "priority": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                            "description": "Task priority level (optional)"
+                        },
+                        "due_date": {
+                            "type": "string",
+                            "description": "Due date in natural language (e.g., 'tomorrow', '2025-10-20', 'next week')"
+                        },
+                        "tags": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of tags to categorize the task (e.g., ['work', 'urgent'])"
+                        }
+                    },
+                    "required": ["description"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "complete_task",
+                "description": "Mark a task as complete. Task is moved from TODO to DONE list with completion timestamp. Can identify task by number (1-based) or partial text match.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_identifier": {
+                            "type": "string",
+                            "description": "Task number (e.g., '1', '2') or partial description text (e.g., 'milk', 'report')"
+                        }
+                    },
+                    "required": ["task_identifier"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_tasks",
+                "description": "List pending tasks with optional filters. Use for 'what's on my list', 'show tasks', etc. Default to showing just 2 tasks for brief responses.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "filter_priority": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                            "description": "Filter tasks by priority level"
+                        },
+                        "filter_tag": {
+                            "type": "string",
+                            "description": "Filter tasks by tag"
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "Maximum number of tasks to return (default: 2 for brevity)",
+                            "minimum": 1,
+                            "maximum": 20,
+                            "default": 2
+                        },
+                        "offset": {
+                            "type": "integer",
+                            "description": "Number of tasks to skip for pagination (default: 0)",
+                            "minimum": 0,
+                            "default": 0
+                        }
+                    },
+                    "required": []
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_task",
+                "description": "Get a specific task by its number (1-based index). Use when user asks 'what's the third task', 'show me task 5', etc.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_number": {
+                            "type": "integer",
+                            "description": "Task number (1-based index)",
+                            "minimum": 1
+                        }
+                    },
+                    "required": ["task_number"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "obsolete_task",
+                "description": "Mark a task as obsolete/canceled. Task is moved from TODO to OBSOLETE list with timestamp. Use when user wants to cancel or mark a task as no longer relevant. Can identify task by number (1-based) or partial text match.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_identifier": {
+                            "type": "string",
+                            "description": "Task number (e.g., '1', '2') or partial description text (e.g., 'milk', 'report')"
+                        }
+                    },
+                    "required": ["task_identifier"]
                 }
             }
         }

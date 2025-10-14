@@ -18,6 +18,7 @@ from datetime import datetime
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
 from src.tools.music_controller_api import YouTubeMusicAPIController
+from src.tools.todo_manager import TodoManager
 from ..memory.memory_manager import MemoryManager
 from .utils import run_ahk_script
 
@@ -37,6 +38,15 @@ class ToolRegistry:
             host=settings.youtube_music_api.host,
             port=settings.youtube_music_api.port
         )
+        
+        # Initialize TODO manager
+        self.todo_manager = None
+        if settings.todo_settings.enabled:
+            try:
+                self.todo_manager = TodoManager(data_dir=settings.todo_settings.data_dir)
+                app_logger.info(f"TODO manager initialized at {settings.todo_settings.data_dir}")
+            except Exception as e:
+                app_logger.error(f"Failed to initialize TODO manager: {e}")
         
         # Validate AutoHotkey executable (still needed for system controls)
         if not os.path.exists(self.autohotkey_exe):
@@ -107,6 +117,16 @@ class ToolRegistry:
                 return self._execute_speak_response(parameters)
             elif tool_name == "get_song_info":
                 return self._execute_get_song_info(parameters)
+            elif tool_name == "add_task":
+                return self._execute_add_task(parameters)
+            elif tool_name == "complete_task":
+                return self._execute_complete_task(parameters)
+            elif tool_name == "list_tasks":
+                return self._execute_list_tasks(parameters)
+            elif tool_name == "get_task":
+                return self._execute_get_task(parameters)
+            elif tool_name == "obsolete_task":
+                return self._execute_obsolete_task(parameters)
             else:
                 app_logger.error(f"Unknown tool name: {tool_name}")
                 return {
@@ -434,6 +454,273 @@ class ToolRegistry:
             "feedback": message,  # This will be spoken by the TTS system
             "response_type": response_type
         }
+
+    def _execute_add_task(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute add_task tool to add a new TODO item."""
+        if not self.todo_manager:
+            return {
+                "success": False,
+                "error": "TODO manager is not enabled",
+                "feedback": "TODO list is not available"
+            }
+        
+        description = parameters.get("description")
+        priority = parameters.get("priority")
+        due_date = parameters.get("due_date")
+        tags = parameters.get("tags")
+        
+        if not description:
+            return {
+                "success": False,
+                "error": "Task description is required",
+                "feedback": "I need a task description"
+            }
+        
+        success, message, task = self.todo_manager.add_task(
+            description=description,
+            priority=priority,
+            due_date=due_date,
+            tags=tags
+        )
+        
+        if success:
+            # Brief feedback based on priority
+            if priority == "high":
+                feedback = "High priority task added"
+            elif priority:
+                feedback = f"{priority.capitalize()} priority task added"
+            else:
+                feedback = "Task added"
+            
+            return {
+                "success": True,
+                "output": message,
+                "feedback": feedback
+            }
+        else:
+            return {
+                "success": False,
+                "error": message,
+                "feedback": "Failed to add task"
+            }
+
+    def _execute_complete_task(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute complete_task tool to mark a task as done."""
+        if not self.todo_manager:
+            return {
+                "success": False,
+                "error": "TODO manager is not enabled",
+                "feedback": "TODO list is not available"
+            }
+        
+        task_identifier = parameters.get("task_identifier")
+        
+        if not task_identifier:
+            return {
+                "success": False,
+                "error": "Task identifier is required",
+                "feedback": "Which task should I complete?"
+            }
+        
+        success, message, task = self.todo_manager.complete_task(task_identifier)
+        
+        if success:
+            # Brief feedback
+            try:
+                task_num = int(task_identifier)
+                feedback = "Task completed"
+            except ValueError:
+                feedback = "Task completed"
+            
+            return {
+                "success": True,
+                "output": message,
+                "feedback": feedback
+            }
+        else:
+            return {
+                "success": False,
+                "error": message,
+                "feedback": "Couldn't find that task"
+            }
+
+    def _execute_list_tasks(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute list_tasks tool to retrieve pending tasks."""
+        if not self.todo_manager:
+            return {
+                "success": False,
+                "error": "TODO manager is not enabled",
+                "feedback": "TODO list is not available"
+            }
+        
+        filter_priority = parameters.get("filter_priority")
+        filter_tag = parameters.get("filter_tag")
+        count = parameters.get("count", 2)
+        offset = parameters.get("offset", 0)
+        
+        success, message, tasks, total_count = self.todo_manager.list_tasks(
+            filter_priority=filter_priority,
+            filter_tag=filter_tag,
+            count=count,
+            offset=offset
+        )
+        
+        if not success:
+            return {
+                "success": False,
+                "error": message,
+                "feedback": "Failed to list tasks"
+            }
+        
+        # Build intelligent feedback
+        if total_count == 0:
+            feedback = "You have no pending tasks"
+        else:
+            # Start with count
+            if filter_priority:
+                feedback = f"You have {total_count} {filter_priority} priority task"
+                if total_count != 1:
+                    feedback += "s"
+            elif filter_tag:
+                feedback = f"You have {total_count} task"
+                if total_count != 1:
+                    feedback += "s"
+                feedback += f" tagged {filter_tag}"
+            else:
+                feedback = f"You have {total_count} task"
+                if total_count != 1:
+                    feedback += "s"
+            
+            # Add task details (up to count returned)
+            for i, task in enumerate(tasks, start=offset + 1):
+                ordinal = self._get_ordinal(i)
+                task_desc = task.description
+                
+                # Add priority if high
+                priority_suffix = ""
+                if task.priority == "high":
+                    priority_suffix = ", high priority"
+                
+                # Add due date if present
+                due_suffix = ""
+                if task.due_date:
+                    due_suffix = f", due {task.due_date}"
+                
+                feedback += f". {ordinal}: {task_desc}{priority_suffix}{due_suffix}"
+        
+        return {
+            "success": True,
+            "output": json.dumps({"total": total_count, "tasks": [t.to_dict() for t in tasks]}),
+            "feedback": feedback
+        }
+
+    def _execute_get_task(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute get_task tool to retrieve a specific task by number."""
+        if not self.todo_manager:
+            return {
+                "success": False,
+                "error": "TODO manager is not enabled",
+                "feedback": "TODO list is not available"
+            }
+        
+        task_number = parameters.get("task_number")
+        
+        if not task_number:
+            return {
+                "success": False,
+                "error": "Task number is required",
+                "feedback": "Which task number?"
+            }
+        
+        success, message, task = self.todo_manager.get_task_by_number(task_number)
+        
+        if not success:
+            return {
+                "success": False,
+                "error": message,
+                "feedback": f"Task {task_number} not found"
+            }
+        
+        # Build feedback with task details
+        ordinal = self._get_ordinal(task_number)
+        feedback = f"{ordinal} task: {task.description}"
+        
+        if task.priority:
+            feedback += f", {task.priority} priority"
+        
+        if task.due_date:
+            feedback += f", due {task.due_date}"
+        
+        if task.tags:
+            feedback += f", tags: {', '.join(task.tags)}"
+        
+        return {
+            "success": True,
+            "output": json.dumps(task.to_dict()),
+            "feedback": feedback
+        }
+
+    def _execute_obsolete_task(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute obsolete_task tool to mark a task as obsolete/canceled."""
+        if not self.todo_manager:
+            return {
+                "success": False,
+                "error": "TODO manager is not enabled",
+                "feedback": "TODO list is not available"
+            }
+        
+        task_identifier = parameters.get("task_identifier")
+        
+        if not task_identifier:
+            return {
+                "success": False,
+                "error": "Task identifier is required",
+                "feedback": "Which task should I mark as obsolete?"
+            }
+        
+        success, message, task = self.todo_manager.mark_task_obsolete(task_identifier)
+        
+        if success:
+            # Brief feedback
+            feedback = "Task marked obsolete"
+            
+            return {
+                "success": True,
+                "output": message,
+                "feedback": feedback
+            }
+        else:
+            return {
+                "success": False,
+                "error": message,
+                "feedback": "Couldn't find that task"
+            }
+
+    def _get_ordinal(self, n: int) -> str:
+        """Convert number to ordinal string (1 -> 'First', 2 -> 'Second', etc.)"""
+        if n == 1:
+            return "First"
+        elif n == 2:
+            return "Second"
+        elif n == 3:
+            return "Third"
+        elif n == 4:
+            return "Fourth"
+        elif n == 5:
+            return "Fifth"
+        elif n == 6:
+            return "Sixth"
+        elif n == 7:
+            return "Seventh"
+        elif n == 8:
+            return "Eighth"
+        elif n == 9:
+            return "Ninth"
+        elif n == 10:
+            return "Tenth"
+        else:
+            # For numbers > 10, use "Task N"
+            return f"Task {n}"
 
     def _run_autohotkey_script(self, script_path: Path, args: List[str]) -> Dict[str, Any]:
         """

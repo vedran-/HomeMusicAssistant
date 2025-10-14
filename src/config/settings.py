@@ -42,6 +42,28 @@ class LoggingSettings(BaseModel):
     level: str = Field(default="INFO")
     format: str = Field(default="{time} | {level} | {message}")
 
+class PowerSettings(BaseModel):
+    """Power management configuration.
+
+    - log_power_requests: when true, logs `powercfg /requests` snapshot on startup (Windows only).
+    - auto_override_windows10_audio_blockers: when true and elevated, auto-applies request override for audio driver blocks on Win10.
+    - allow_sleep_during_capture: when true, allow system sleep while recording command audio (not only during passive wake listening).
+    - diagnose_on_startup: when true, runs diagnostics/override logic on startup.
+    """
+    log_power_requests: bool = Field(default=False)
+    auto_override_windows10_audio_blockers: bool = Field(default=True)
+    allow_sleep_during_capture: bool = Field(default=True)
+    diagnose_on_startup: bool = Field(default=True)
+
+class TodoSettings(BaseModel):
+    """TODO list configuration."""
+    enabled: bool = Field(default=True, description="Enable TODO list functionality")
+    data_dir: str = Field(default="./data/todos", description="Directory to store TODO.json and DONE.json files")
+    
+    @validator('data_dir', pre=True, always=True)
+    def resolve_data_dir(cls, v):
+        return os.path.abspath(v)
+
 class TTSSettings(BaseModel):
     enabled: bool = Field(default=True, description="Enable text-to-speech functionality")
     voice_model: str = Field(default="en_US-amy-medium", description="Piper voice model to use")
@@ -103,6 +125,18 @@ class Mem0Config(BaseModel):
     embedder: EmbedderProvider = Field(discriminator='provider')
     vector_store: Optional[VectorStoreConfig] = None
 
+class MemoryConfig(BaseModel):
+    """Simplified memory config from config.json under key 'memory_config'."""
+    data_path: Optional[str] = Field(default="./.memory")
+    llm_provider: Optional[str] = Field(default="litellm")
+    llm_model: Optional[str] = None
+    llm_api_key: Optional[str] = None
+    embedder_provider: Optional[str] = Field(default="lmstudio")
+    embedder_model: Optional[str] = None
+    embedder_api_key: Optional[str] = None
+    vector_store_provider: Optional[str] = Field(default="qdrant")
+    vector_store_embedding_model_dims: Optional[int] = 768
+
 
 class AppSettings(BaseModel):
     groq_api_key: str
@@ -115,6 +149,9 @@ class AppSettings(BaseModel):
     youtube_music_api: YouTubeMusicAPISettings = Field(default_factory=YouTubeMusicAPISettings)
     tts_settings: TTSSettings = Field(default_factory=TTSSettings)
     mem0_config: Optional[Mem0Config] = None
+    memory_config: Optional[MemoryConfig] = None
+    power: PowerSettings = Field(default_factory=PowerSettings)
+    todo_settings: TodoSettings = Field(default_factory=TodoSettings)
 
 def load_settings(config_path: str = "config.json") -> AppSettings:
     # Try to load keys from environment first
@@ -146,58 +183,6 @@ def load_settings(config_path: str = "config.json") -> AppSettings:
         config_data['litellm_settings']['api_key'] = litellm_env_key
     # If it is required by a specific provider, LiteLLM will handle that error.
 
-    # Auto-construct mem0_config from litellm_settings if it doesn't exist
-    if 'mem0_config' not in config_data and 'litellm_settings' in config_data:
-        litellm_conf = config_data['litellm_settings']
-        if litellm_conf.get('model'):
-            model_name = litellm_conf.get("model")
-            # Prefer a cloud embedder if available to avoid requiring LM Studio
-            prefer_gemini = bool(config_data.get('google_api_key'))
-            embedder_provider = 'gemini' if prefer_gemini else 'lmstudio'
-            config_data['mem0_config'] = {
-                "enabled": True,
-                "llm": {
-                    "provider": "litellm",
-                    "config": {
-                        "model": model_name
-                    }
-                },
-                "embedder": {
-                    "provider": embedder_provider
-                },
-                "vector_store": {
-                    "provider": "qdrant",
-                    "config": {
-                        "embedding_model_dims": 768
-                    }
-                }
-            }
-
-    # Set GROQ_API_KEY environment variable if litellm/groq is used, as mem0's litellm integration expects it
-    if 'mem0_config' in config_data:
-        mem0_conf = config_data['mem0_config']
-        llm_conf = mem0_conf.get('llm', {})
-        if llm_conf.get('provider') == 'litellm':
-            model_name = llm_conf.get('config', {}).get('model', '')
-            if 'groq' in model_name:
-                groq_key = config_data.get('groq_api_key')
-                if groq_key and not os.getenv('GROQ_API_KEY'):
-                    os.environ['GROQ_API_KEY'] = groq_key
-
-    # Inject Google API key into mem0 config if gemini is the provider and key exists
-    if 'mem0_config' in config_data:
-        mem0_conf = config_data['mem0_config']
-        if mem0_conf.get('embedder', {}).get('provider') == 'gemini':
-            google_key = config_data.get('google_api_key')
-            if google_key:
-                if 'config' not in mem0_conf['embedder']:
-                    mem0_conf['embedder']['config'] = {}
-                mem0_conf['embedder']['config']['api_key'] = google_key
-            # Also set vector store dim for gemini
-            if 'vector_store' not in mem0_conf:
-                mem0_conf['vector_store'] = {"provider": "qdrant", "config": {}}
-            mem0_conf['vector_store']['config']['embedding_model_dims'] = 768
-
 
     # Ensure paths are created if they are relative and don't exist
     # This is now handled by Pydantic DirectoryPath for openwakeword_models_dir and autohotkey_scripts_dir if they are part of the model directly
@@ -220,6 +205,15 @@ def load_settings(config_path: str = "config.json") -> AppSettings:
             os.makedirs(tts_models_dir, exist_ok=True)
             print(f"Created TTS models directory: {tts_models_dir}")
         config_data['tts_settings']['models_dir'] = tts_models_dir
+
+    # Create TODO data directory if it doesn't exist
+    todo_settings_data = config_data.get('todo_settings', {})
+    if 'data_dir' in todo_settings_data:
+        todo_data_dir = os.path.abspath(todo_settings_data['data_dir'])
+        if not os.path.exists(todo_data_dir):
+            os.makedirs(todo_data_dir, exist_ok=True)
+            print(f"Created TODO data directory: {todo_data_dir}")
+        config_data['todo_settings']['data_dir'] = todo_data_dir
 
     return AppSettings(**config_data)
 
