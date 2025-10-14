@@ -4,6 +4,7 @@ import time
 from typing import Optional, Dict, Any
 
 from src.config.settings import load_settings, AppSettings
+from src.utils.audio_effects import play_startup_sound
 from src.utils.logger import app_logger, configure_logging
 from src.utils.ollama_manager import OllamaManager
 from src.audio.wake_word import WakeWordDetector
@@ -160,6 +161,8 @@ def run_voice_assistant(settings: AppSettings):
     system_prompt = get_system_prompt()
     available_tools = get_available_tools()
     
+    play_startup_sound()
+
     # Session management
     USER_ID = "home_user"
     SESSION_TIMEOUT_MINUTES = 10

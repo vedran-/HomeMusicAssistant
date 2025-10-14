@@ -62,6 +62,13 @@ def get_audio_dir(audio_dir: Optional[str] = None) -> Path:
         return Path(__file__).parent.parent / "audio"
     return Path(audio_dir)
 
+def play_startup_sound(audio_dir: Optional[str] = None) -> None:
+    audio_dir_path = get_audio_dir(audio_dir)
+    sound_file = audio_dir_path / "Startup.mp3"
+    app_logger.debug("Playing wake word accepted sound effect")
+    play_sound_effect_async(str(sound_file), volume=0.5)
+
+
 def play_wake_word_accepted_sound(audio_dir: Optional[str] = None) -> None:
     """
     Play the wake word accepted sound effect.

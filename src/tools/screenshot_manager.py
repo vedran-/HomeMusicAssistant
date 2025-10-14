@@ -17,7 +17,7 @@ from PIL import Image
 
 from src.config.settings import AppSettings
 from src.utils.logger import app_logger
-from src.utils.audio_effects import play_wake_word_accepted_sound
+from src.utils.audio_effects import play_vision_started_sound
 
 # Platform-specific imports for active window capture
 if sys.platform == 'win32':
@@ -329,7 +329,7 @@ class ScreenshotManager:
         
         # Step 1: Play processing sound (reuse wake word sound as processing indicator)
         try:
-            play_wake_word_accepted_sound()
+            play_vision_started_sound()
         except Exception as e:
             app_logger.warning(f"Failed to play processing sound: {e}")
         
@@ -348,16 +348,21 @@ class ScreenshotManager:
                 }
             
             # Step 3: Send to vision API with focus hint
-            app_logger.info("Sending screenshot to vision API...")
+            app_logger.info("📸 Sending screenshot to vision API...")
+            app_logger.debug(f"Screenshot path: {screenshot_path}")
+            app_logger.debug(f"Focus hint: {focus_hint}")
+            
             vision_success, description = self.vision_client.analyze_image(
                 str(screenshot_path),
                 focus_hint=focus_hint
             )
             
+            app_logger.debug(f"Vision API returned: success={vision_success}, description_length={len(description) if description else 0}")
+            
             if not vision_success:
                 # Vision failed, but we still have the screenshot
                 error_msg = f"Vision analysis failed: {description}"
-                app_logger.error(error_msg)
+                app_logger.error(f"❌ {error_msg}")
                 
                 # Step 4a: Save screenshot with error description
                 if self.settings.screenshot_settings.save_screenshots and screenshot_path:
@@ -383,14 +388,16 @@ class ScreenshotManager:
             # Step 5: Call LLM to answer question based on description
             if not self.llm_client:
                 # No LLM client available, just return the description
-                app_logger.warning("No LLM client available for multi-step processing. Returning vision description.")
+                app_logger.warning("⚠️ No LLM client available for multi-step processing. Returning vision description.")
                 return {
                     "success": True,
                     "output": description,
                     "feedback": description[:500]  # Truncate for TTS
                 }
             
-            app_logger.info("Calling LLM to answer user question based on screen description...")
+            app_logger.info("🤖 Calling LLM to answer user question based on screen description...")
+            app_logger.debug(f"User question: {user_question}")
+            app_logger.debug(f"Description length: {len(description)} characters")
             
             llm_messages = [
                 {
@@ -413,7 +420,7 @@ Please answer their question based on what's visible on the screen. Be concise a
             
             if not answer:
                 # LLM failed, fallback to description
-                app_logger.warning("LLM completion failed. Falling back to vision description.")
+                app_logger.warning("⚠️ LLM completion failed. Falling back to vision description.")
                 return {
                     "success": True,
                     "output": description,
@@ -421,7 +428,8 @@ Please answer their question based on what's visible on the screen. Be concise a
                 }
             
             # Step 6: Return answer
-            app_logger.info(f"Multi-step workflow complete. Answer: {len(answer)} characters")
+            app_logger.info(f"✅ Multi-step workflow complete. Answer: {len(answer)} characters")
+            app_logger.debug(f"Answer preview: {answer[:200]}...")
             
             return {
                 "success": True,
@@ -430,8 +438,13 @@ Please answer their question based on what's visible on the screen. Be concise a
             }
             
         except Exception as e:
-            error_msg = f"Screen analysis workflow failed: {str(e)}"
-            app_logger.error(error_msg, exc_info=True)
+            error_msg = f"Screen analysis workflow failed: {type(e).__name__}: {str(e)}"
+            # Use + to avoid KeyError with curly braces in error messages
+            app_logger.error("❌ " + error_msg, exc_info=True)
+            
+            # Log the full exception details
+            import traceback
+            app_logger.error(f"Full traceback:\n{traceback.format_exc()}")
             
             # Try to save screenshot even on error
             if screenshot_path and self.settings.screenshot_settings.save_screenshots:
