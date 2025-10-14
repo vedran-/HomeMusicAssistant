@@ -70,6 +70,11 @@ class TodoSettings(BaseModel):
     def resolve_data_dir(cls, v):
         return os.path.abspath(v)
 
+class TavilySettings(BaseModel):
+    """Tavily web search configuration."""
+    enabled: bool = Field(default=True, description="Enable web search functionality")
+    api_key: Optional[str] = Field(default=None, description="Tavily API key")
+
 class ScreenshotSettings(BaseModel):
     """Screenshot and vision analysis configuration."""
     enabled: bool = Field(default=True, description="Enable screenshot analysis")
@@ -178,12 +183,14 @@ class AppSettings(BaseModel):
     power: PowerSettings = Field(default_factory=PowerSettings)
     todo_settings: TodoSettings = Field(default_factory=TodoSettings)
     screenshot_settings: ScreenshotSettings = Field(default_factory=ScreenshotSettings)
+    tavily_settings: TavilySettings = Field(default_factory=TavilySettings)
 
 def load_settings(config_path: str = "config.json") -> AppSettings:
     # Try to load keys from environment first
     groq_env_key = os.getenv("GROQ_API_KEY")
     litellm_env_key = os.getenv("LITELLM_API_KEY")
     google_env_key = os.getenv("GOOGLE_API_KEY")
+    tavily_env_key = os.getenv("TAVILY_API_KEY")
 
     config_file_path = os.path.abspath(config_path)
 
@@ -209,6 +216,12 @@ def load_settings(config_path: str = "config.json") -> AppSettings:
         config_data['litellm_settings']['api_key'] = litellm_env_key
     # If it is required by a specific provider, LiteLLM will handle that error.
 
+    # Override Tavily API key from environment if present
+    if 'tavily_settings' not in config_data:
+        config_data['tavily_settings'] = {}
+    
+    if tavily_env_key:
+        config_data['tavily_settings']['api_key'] = tavily_env_key
 
     # Ensure paths are created if they are relative and don't exist
     # This is now handled by Pydantic DirectoryPath for openwakeword_models_dir and autohotkey_scripts_dir if they are part of the model directly

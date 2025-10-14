@@ -66,6 +66,16 @@ class ToolRegistry:
             except Exception as e:
                 app_logger.error(f"Failed to initialize screenshot manager: {e}", exc_info=True)
         
+        # Initialize Tavily manager
+        self.tavily_manager = None
+        if settings.tavily_settings.enabled and settings.tavily_settings.api_key:
+            try:
+                from src.tools.tavily_manager import TavilyManager
+                self.tavily_manager = TavilyManager(api_key=settings.tavily_settings.api_key)
+                app_logger.info("Tavily search manager initialized")
+            except Exception as e:
+                app_logger.error(f"Failed to initialize Tavily manager: {e}")
+        
         # Validate AutoHotkey executable (still needed for system controls)
         if not os.path.exists(self.autohotkey_exe):
             raise FileNotFoundError(f"AutoHotkey executable not found: {self.autohotkey_exe}")
@@ -134,6 +144,8 @@ class ToolRegistry:
                 return self._handle_unknown_request(parameters)
             elif tool_name == "speak_response":
                 return self._execute_speak_response(parameters)
+            elif tool_name == "web_search":
+                return self._execute_web_search(parameters)
             elif tool_name == "get_song_info":
                 return self._execute_get_song_info(parameters)
             elif tool_name == "add_task":
@@ -893,6 +905,39 @@ ExitApp(0)
         )
         
         return result
+
+    def _execute_web_search(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute web search using Tavily."""
+        if not self.tavily_manager:
+            return {
+                "success": False,
+                "error": "Web search is not enabled or API key not configured",
+                "feedback": "Web search is not available"
+            }
+        
+        query = parameters.get("query")
+        if not query:
+            return {
+                "success": False,
+                "error": "Query parameter required",
+                "feedback": "I need a search query"
+            }
+        
+        success, message, results = self.tavily_manager.search(query)
+        
+        if success:
+            return {
+                "success": True,
+                "output": message,
+                "search_results": results,  # Raw results for LLM to synthesize
+                "feedback": ""  # LLM will use speak_response after synthesizing
+            }
+        else:
+            return {
+                "success": False,
+                "error": message,
+                "feedback": "Search failed"
+            }
 
 if __name__ == "__main__":
     # Basic test of the tool registry

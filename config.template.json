@@ -52,5 +52,9 @@
   "todo_settings": {
     "enabled": true,
     "data_dir": "./data/todos"
+  },
+  "tavily_settings": {
+    "enabled": true,
+    "api_key": "YOUR_TAVILY_API_KEY"
   }
 }

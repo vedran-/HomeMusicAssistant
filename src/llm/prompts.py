@@ -149,6 +149,20 @@ Examples:
 - "Can you describe what you see on my screen?" → analyze_screen(user_question="Describe the screen", capture_mode="all_monitors")
 - "What does this window show?" → analyze_screen(user_question="What does this window show?", capture_mode="active_window")
 
+CRITICAL RULE FOR WEB SEARCH:
+When the user asks for information you don't have or requests real-time data:
+- Weather, current events, news, documentation, "search for X", "look up Y", "find information about Z"
+- Call web_search with the query
+- The tool returns search results; YOU MUST synthesize them into a brief 1-2 sentence answer
+- Use speak_response to deliver the synthesized answer to the user
+
+Examples:
+- "What's the weather in Paris today?" → web_search(query="weather Paris today") then speak_response with synthesized answer
+- "Search for Python documentation on async" → web_search(query="Python async documentation") then speak_response with synthesized answer
+- "What's happening in the news today?" → web_search(query="latest news today") then speak_response with synthesized answer
+- "Look up the capital of Australia" → web_search(query="capital of Australia") then speak_response with synthesized answer
+- "Find information about the Eiffel Tower" → web_search(query="Eiffel Tower information") then speak_response with synthesized answer
+
 Current date and time: """ + datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
 
 def get_available_tools() -> List[Dict[str, Any]]:
@@ -275,6 +289,23 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         }
                     },
                     "required": ["message"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "web_search",
+                "description": "Search the web for real-time information. Use when user asks about current events, weather, documentation, or requests a web search. After getting results, synthesize them into a brief answer using speak_response.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The search query to look up on the web"
+                        }
+                    },
+                    "required": ["query"]
                 }
             }
         },
