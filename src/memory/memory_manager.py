@@ -1,23 +1,65 @@
 from mem0 import Memory
 from typing import List, Dict, Any, Optional
-from ..config.settings import Mem0Config
+from ..config.settings import Mem0Config, AppSettings
 from ..utils.logger import app_logger
 import os
 
 class MemoryManager:
-    def __init__(self, config: Optional[Mem0Config]):
-        self.enabled = bool(config and config.enabled)
-        if self.enabled and config:
-            try:
-                # Convert Pydantic config to dict for mem0, using model_dump for Pydantic v2
+    def __init__(self, config: Optional[Mem0Config], app_settings: Optional[AppSettings] = None):
+        """Initialize MemoryManager.
+
+        If app_settings.memory_config is provided (from config.json), build a mem0 config from it.
+        Otherwise, fall back to provided Mem0Config (if any).
+        """
+        # Build mem0_config_dict either from simplified memory_config or from Mem0Config
+        mem0_config_dict: Optional[Dict[str, Any]] = None
+        if app_settings and getattr(app_settings, 'memory_config', None):
+            mc = app_settings.memory_config
+            # Compose mem0 configuration structure expected by mem0 OSS
+            mem0_config_dict = {
+                "llm": {
+                    "provider": mc.llm_provider or "litellm",
+                    "config": {
+                        "model": mc.llm_model or (app_settings.litellm_settings.model if app_settings and app_settings.litellm_settings else None),
+                        # mem0's litellm integration relies on environment variable for some providers; keep api_key for completeness
+                        "api_key": mc.llm_api_key or app_settings.litellm_settings.api_key if app_settings and app_settings.litellm_settings else None,
+                    }
+                },
+                "embedder": {
+                    "provider": mc.embedder_provider or "lmstudio",
+                    "config": {
+                        # For gemini: model and api_key
+                        "model": mc.embedder_model,
+                        "api_key": mc.embedder_api_key or app_settings.google_api_key if app_settings else None,
+                        # For lmstudio: base url/model can be defaulted by mem0
+                    }
+                },
+                "vector_store": {
+                    "provider": mc.vector_store_provider or "qdrant",
+                    "config": {
+                        "embedding_model_dims": mc.vector_store_embedding_model_dims or 768
+                    }
+                }
+            }
+            # Determine enabled flag
+            self.enabled = True
+            data_path = mc.data_path
+        else:
+            self.enabled = bool(config and config.enabled)
+            if config:
+                # Convert Pydantic config to dict
                 if hasattr(config, 'model_dump'):
                     mem0_config_dict = config.model_dump(exclude_unset=True)
                 else:
                     mem0_config_dict = config.dict(exclude_unset=True)
+                data_path = getattr(config, 'data_path', None) or mem0_config_dict.get("data_path")
+            else:
+                data_path = None
 
+        if self.enabled and mem0_config_dict:
+            try:
                 # Handle data path specifically for the vector store
                 # Always honor the configured default, even if excluded by model_dump(exclude_unset=True)
-                data_path = getattr(config, 'data_path', None) or mem0_config_dict.pop("data_path", None)
                 if data_path:
                     abs_data_path = os.path.abspath(data_path)
                     # Ensure directory exists to avoid provider creating a new relative path elsewhere
@@ -40,12 +82,35 @@ class MemoryManager:
                     app_logger.info(f"MemoryManager using default data path: {default_path}")
 
 
+                # Extra diagnostics for embedder config
+                embedder_provider = mem0_config_dict.get('embedder', {}).get('provider')
+                app_logger.info(f"Mem0 embedder provider: {embedder_provider}")
+                if embedder_provider == 'gemini':
+                    app_logger.info(f"GOOGLE_API_KEY present: {bool(os.getenv('GOOGLE_API_KEY'))}")
+                # Initialize mem0
                 self.mem0 = Memory.from_config(mem0_config_dict)
                 app_logger.info("MemoryManager initialized successfully with mem0.")
             except Exception as e:
                 app_logger.error("Failed to initialize mem0 from config: {}", e, exc_info=True)
-                app_logger.warning("Disabling MemoryManager due to initialization error.")
-                self.enabled = False
+                # If Gemini import failed, fall back to lmstudio embedder automatically
+                if 'cannot import name' in str(e).lower() and 'genai' in str(e).lower():
+                    try:
+                        app_logger.warning("Gemini embedder initialization failed. Falling back to 'lmstudio' embedder.")
+                        mem0_config_dict['embedder'] = {
+                            'provider': 'lmstudio',
+                            'config': {
+                                # Defaults are acceptable; LM Studio server should be available if used
+                            }
+                        }
+                        self.mem0 = Memory.from_config(mem0_config_dict)
+                        app_logger.info("MemoryManager initialized with fallback 'lmstudio' embedder.")
+                    except Exception as fe:
+                        app_logger.error("Fallback to 'lmstudio' embedder also failed: {}", fe, exc_info=True)
+                        app_logger.warning("Disabling MemoryManager due to initialization error.")
+                        self.enabled = False
+                else:
+                    app_logger.warning("Disabling MemoryManager due to initialization error.")
+                    self.enabled = False
         else:
             self.mem0 = None
             app_logger.info("MemoryManager is disabled.")

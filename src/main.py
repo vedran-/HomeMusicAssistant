@@ -30,6 +30,9 @@ def initialize_components(settings: AppSettings):
          os.environ["OPENAI_API_KEY"] = settings.litellm_settings.api_key
     elif settings.groq_api_key:
          os.environ["OPENAI_API_KEY"] = settings.groq_api_key
+    # Ensure Google API key is exported for mem0 Gemini embedder
+    if getattr(settings, 'google_api_key', None):
+         os.environ["GOOGLE_API_KEY"] = settings.google_api_key
 
 
     # Configure logging based on settings
@@ -42,7 +45,7 @@ def initialize_components(settings: AppSettings):
     transcriber = GroqTranscriber(settings)
     llm_client = LiteLLMClient(settings)
     tool_registry = ToolRegistry(settings)
-    memory_manager = MemoryManager(settings.mem0_config)
+    memory_manager = MemoryManager(settings.mem0_config, app_settings=settings)
     
     # Log available microphones for user reference
     audio_capturer.list_available_microphones()
