@@ -12,3 +12,5 @@ numpy
 mem0ai
 ollama
 psutil
+Pillow
+pyautogui

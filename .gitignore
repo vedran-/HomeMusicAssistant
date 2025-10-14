@@ -8,3 +8,4 @@ config - Copy.json
 /tools/piper
 /test_memory_data
 /data/todos
+/data/screenshots

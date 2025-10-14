@@ -64,6 +64,25 @@ class TodoSettings(BaseModel):
     def resolve_data_dir(cls, v):
         return os.path.abspath(v)
 
+class ScreenshotSettings(BaseModel):
+    """Screenshot and vision analysis configuration."""
+    enabled: bool = Field(default=True, description="Enable screenshot analysis")
+    data_dir: str = Field(default="./data/screenshots", description="Directory to save screenshots")
+    default_capture_mode: Literal["active_window", "all_monitors"] = Field(
+        default="active_window",
+        description="Default screenshot capture mode"
+    )
+    save_screenshots: bool = Field(default=True, description="Save screenshots to disk")
+    vision_timeout: float = Field(default=30.0, description="Timeout for vision API calls")
+    vision_model: str = Field(
+        default="meta-llama/llama-4-maverick-17b-128e-instruct",
+        description="Groq vision model to use"
+    )
+    
+    @validator('data_dir', pre=True, always=True)
+    def resolve_data_dir(cls, v):
+        return os.path.abspath(v)
+
 class TTSSettings(BaseModel):
     enabled: bool = Field(default=True, description="Enable text-to-speech functionality")
     voice_model: str = Field(default="en_US-amy-medium", description="Piper voice model to use")
@@ -152,6 +171,7 @@ class AppSettings(BaseModel):
     memory_config: Optional[MemoryConfig] = None
     power: PowerSettings = Field(default_factory=PowerSettings)
     todo_settings: TodoSettings = Field(default_factory=TodoSettings)
+    screenshot_settings: ScreenshotSettings = Field(default_factory=ScreenshotSettings)
 
 def load_settings(config_path: str = "config.json") -> AppSettings:
     # Try to load keys from environment first
@@ -214,6 +234,15 @@ def load_settings(config_path: str = "config.json") -> AppSettings:
             os.makedirs(todo_data_dir, exist_ok=True)
             print(f"Created TODO data directory: {todo_data_dir}")
         config_data['todo_settings']['data_dir'] = todo_data_dir
+
+    # Create screenshot data directory if it doesn't exist
+    screenshot_settings_data = config_data.get('screenshot_settings', {})
+    if 'data_dir' in screenshot_settings_data:
+        screenshot_data_dir = os.path.abspath(screenshot_settings_data['data_dir'])
+        if not os.path.exists(screenshot_data_dir):
+            os.makedirs(screenshot_data_dir, exist_ok=True)
+            print(f"Created screenshot data directory: {screenshot_data_dir}")
+        config_data['screenshot_settings']['data_dir'] = screenshot_data_dir
 
     return AppSettings(**config_data)
 

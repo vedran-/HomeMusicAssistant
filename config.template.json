@@ -40,5 +40,17 @@
     "sample_rate": 22050,
     "speak_responses": true,
     "max_speech_length": 10000
+  },
+  "screenshot_settings": {
+    "enabled": true,
+    "data_dir": "./data/screenshots",
+    "default_capture_mode": "active_window",
+    "save_screenshots": true,
+    "vision_timeout": 30.0,
+    "vision_model": "meta-llama/llama-4-maverick-17b-128e-instruct"
+  },
+  "todo_settings": {
+    "enabled": true,
+    "data_dir": "./data/todos"
   }
 }

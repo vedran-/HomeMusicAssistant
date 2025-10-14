@@ -48,6 +48,24 @@ class ToolRegistry:
             except Exception as e:
                 app_logger.error(f"Failed to initialize TODO manager: {e}")
         
+        # Initialize screenshot manager (vision + multi-step agentic)
+        self.screenshot_manager = None
+        if settings.screenshot_settings.enabled:
+            try:
+                from src.vision.groq_vision_client import GroqVisionClient
+                from src.tools.screenshot_manager import ScreenshotManager
+                
+                vision_client = GroqVisionClient(settings)
+                # llm_client will be injected during execution (to avoid circular dependency)
+                self.screenshot_manager = ScreenshotManager(
+                    settings=settings,
+                    vision_client=vision_client,
+                    llm_client=None  # Injected later
+                )
+                app_logger.info(f"Screenshot manager initialized at {settings.screenshot_settings.data_dir}")
+            except Exception as e:
+                app_logger.error(f"Failed to initialize screenshot manager: {e}", exc_info=True)
+        
         # Validate AutoHotkey executable (still needed for system controls)
         if not os.path.exists(self.autohotkey_exe):
             raise FileNotFoundError(f"AutoHotkey executable not found: {self.autohotkey_exe}")
@@ -60,7 +78,7 @@ class ToolRegistry:
         app_logger.info(f"AutoHotkey: {self.autohotkey_exe}")
         app_logger.info(f"Scripts directory: {self.scripts_dir}")
 
-    def execute_tool_call(self, tool_call: Dict[str, Any], memory_manager: Optional[MemoryManager] = None, user_id: Optional[str] = None, session_id: Optional[str] = None, original_transcript: Optional[str] = None) -> Dict[str, Any]:
+    def execute_tool_call(self, tool_call: Dict[str, Any], memory_manager: Optional[MemoryManager] = None, user_id: Optional[str] = None, session_id: Optional[str] = None, original_transcript: Optional[str] = None, llm_client=None) -> Dict[str, Any]:
         """
         Execute a tool call from the LLM.
         
@@ -70,6 +88,7 @@ class ToolRegistry:
             user_id: Optional user ID for memory operations.
             session_id: Optional session ID for memory operations.
             original_transcript: The original user transcript.
+            llm_client: Optional LiteLLMClient for multi-step agentic tools.
             
         Returns:
             Dict with execution results including success status, output, and feedback
@@ -127,6 +146,8 @@ class ToolRegistry:
                 return self._execute_get_task(parameters)
             elif tool_name == "obsolete_task":
                 return self._execute_obsolete_task(parameters)
+            elif tool_name == "analyze_screen":
+                return self._execute_analyze_screen(parameters, llm_client)
             else:
                 app_logger.error(f"Unknown tool name: {tool_name}")
                 return {
@@ -836,6 +857,42 @@ ExitApp(0)
         except Exception as e:
             app_logger.error(f"Failed to list scripts: {e}")
             return []
+    
+    def _execute_analyze_screen(self, parameters: Dict[str, Any], llm_client) -> Dict[str, Any]:
+        """Execute screen analysis with multi-step agentic workflow."""
+        if not self.screenshot_manager:
+            return {
+                "success": False,
+                "error": "Screenshot analysis not enabled",
+                "feedback": "Screen analysis is not available"
+            }
+        
+        user_question = parameters.get("user_question")
+        focus_hint = parameters.get("focus_hint")
+        capture_mode = parameters.get("capture_mode", "active_window")
+        
+        if not user_question:
+            return {
+                "success": False,
+                "error": "Missing user_question parameter",
+                "feedback": "I need to know what you want to know about the screen"
+            }
+        
+        # Inject llm_client for multi-step processing
+        if llm_client:
+            self.screenshot_manager.llm_client = llm_client
+        else:
+            app_logger.warning("No LLM client provided for multi-step processing. Will return vision description only.")
+        
+        # Execute multi-step workflow
+        app_logger.info(f"Executing analyze_screen: question='{user_question}', mode={capture_mode}, focus_hint={focus_hint}")
+        result = self.screenshot_manager.analyze_and_answer(
+            user_question=user_question,
+            capture_mode=capture_mode,
+            focus_hint=focus_hint
+        )
+        
+        return result
 
 if __name__ == "__main__":
     # Basic test of the tool registry

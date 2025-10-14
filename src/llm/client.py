@@ -250,6 +250,48 @@ class LiteLLMClient:
         app_logger.error(f"Failed to process transcript after {self.max_retries} attempts.", exc_info=True)
         return None
 
+    def get_completion(self, messages: List[Dict[str, Any]], temperature: float = 0.3, max_tokens: int = 1000) -> Optional[str]:
+        """
+        Get a simple text completion without tool calling.
+        Used by agentic tools that need multi-step LLM processing.
+        
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            temperature: Sampling temperature (default 0.3 for focused answers)
+            max_tokens: Maximum response length
+            
+        Returns:
+            Text response or None on failure
+        """
+        app_logger.info(f"Getting LLM completion (multi-step agentic call) with {len(messages)} messages")
+        
+        try:
+            response = completion(
+                model=self.model,
+                messages=messages,
+                api_key=self.api_key if self.api_key else None,
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            
+            if not response or not response.choices:
+                app_logger.error("LLM completion returned empty response")
+                return None
+            
+            first_choice = response.choices[0]
+            
+            if hasattr(first_choice, 'message') and hasattr(first_choice.message, 'content'):
+                text_response = first_choice.message.content
+                app_logger.info(f"LLM completion successful: {len(text_response)} characters")
+                return text_response
+            else:
+                app_logger.error("LLM completion response missing content")
+                return None
+                
+        except Exception as e:
+            app_logger.error(f"LLM completion failed: {type(e).__name__}: {e}", exc_info=True)
+            return None
+
 
 if __name__ == "__main__":
     # Basic test for the LiteLLMClient

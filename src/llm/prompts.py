@@ -133,6 +133,24 @@ Examples:
 - If user says "cancel the report task" → call obsolete_task with task_identifier="report"
 - If user says "how many tasks do I have" → call list_tasks and summarize count
 
+CRITICAL RULE FOR SCREEN ANALYSIS:
+When the user asks about what's on their screen or references screen content:
+- Call analyze_screen with the user's question
+- Optionally provide a focus_hint to guide vision analysis (e.g., "Focus on selected text")
+- The tool will handle screenshot capture, vision analysis, and answering
+- By DEFAULT, captures active window only
+- Only capture all monitors if user says "my screen", "all screens", "entire screen", "whole screen"
+
+Examples:
+- "What's this item?" → analyze_screen(user_question="What's this item?", capture_mode="active_window")
+- "What's on this page?" → analyze_screen(user_question="What's on this page?", capture_mode="active_window")
+- "Summarize the selected text" → analyze_screen(user_question="Summarize the text", focus_hint="Focus on selected or highlighted text")
+- "What's on my screen right now?" → analyze_screen(user_question="What's on the screen?", capture_mode="all_monitors")
+- "Read the error message" → analyze_screen(user_question="What's the error?", focus_hint="Focus on error messages or dialog boxes")
+- "What product am I looking at?" → analyze_screen(user_question="What product is this?", focus_hint="Focus on product details and pricing")
+- "Can you describe what you see on my screen?" → analyze_screen(user_question="Describe the screen", capture_mode="all_monitors")
+- "What does this window show?" → analyze_screen(user_question="What does this window show?", capture_mode="active_window")
+
 Current date and time: """ + datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
 
 def get_available_tools() -> List[Dict[str, Any]]:
@@ -412,6 +430,33 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         }
                     },
                     "required": ["task_identifier"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "analyze_screen",
+                "description": "Capture a screenshot and analyze it to answer questions about screen content. Uses vision AI to understand what's displayed. This is a multi-step agentic tool that captures the screen, analyzes it with vision AI, and provides an answer to the user's question.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_question": {
+                            "type": "string",
+                            "description": "The user's question about the screen content (e.g., 'What's this item?', 'Summarize the text', 'What's the error?')"
+                        },
+                        "focus_hint": {
+                            "type": "string",
+                            "description": "Optional hint about what to focus on in the image (e.g., 'Focus on selected text', 'Focus on product details and pricing', 'Focus on error messages'). This helps the vision AI provide more relevant descriptions."
+                        },
+                        "capture_mode": {
+                            "type": "string",
+                            "enum": ["active_window", "all_monitors"],
+                            "description": "What to capture: 'active_window' (default, captures just the active window) or 'all_monitors' (captures entire screen across all monitors). Use 'all_monitors' only if user specifically says 'my screen', 'all screens', 'entire screen', or 'whole screen'. Otherwise, use 'active_window'.",
+                            "default": "active_window"
+                        }
+                    },
+                    "required": ["user_question"]
                 }
             }
         }

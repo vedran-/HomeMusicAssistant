@@ -81,19 +81,20 @@ def initialize_components(settings: AppSettings):
     
     return wake_detector, audio_capturer, transcriber, llm_client, tool_registry, tts_client, memory_manager
 
-def execute_tool_call(tool_registry: ToolRegistry, tts_client: PiperTTSClient, tool_call: Dict[str, Any], memory_manager: MemoryManager, user_id: str, session_id: str, original_transcript: str):
+def execute_tool_call(tool_registry: ToolRegistry, tts_client: PiperTTSClient, tool_call: Dict[str, Any], memory_manager: MemoryManager, user_id: str, session_id: str, original_transcript: str, llm_client):
     """Execute a tool call and provide user feedback."""
     try:
         tool_name = tool_call.get("tool_name")
         parameters = tool_call.get("parameters", {})
         
-        # Execute tool calls
+        # Execute tool calls (pass llm_client for multi-step agentic tools)
         result = tool_registry.execute_tool_call(
             tool_call,
             memory_manager=memory_manager,
             user_id=user_id,
             session_id=session_id,
-            original_transcript=original_transcript
+            original_transcript=original_transcript,
+            llm_client=llm_client
         )
         
         # Log the result
@@ -255,7 +256,8 @@ def run_voice_assistant(settings: AppSettings):
                     memory_manager=memory_manager,
                     user_id=USER_ID,
                     session_id=session_id,
-                    original_transcript=transcript
+                    original_transcript=transcript,
+                    llm_client=llm_client
                 )
                 
                 if execution_result["success"]:
