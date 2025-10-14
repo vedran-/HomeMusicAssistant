@@ -34,6 +34,9 @@ class WakeWordDetector:
 
         self.chunks_to_skip = 0
         
+        # Windows 10 sleep management tracking
+        self.last_sleep_check_time = 0
+        
         if self.sample_rate != 16000:
             app_logger.warning(f"OpenWakeWord typically expects 16000 Hz, but configured sample rate is {self.sample_rate}. This might affect performance.")
         
@@ -181,6 +184,48 @@ class WakeWordDetector:
                 
         except Exception as e:
             app_logger.error(f"Error resetting model state: {e}")
+    
+    def _should_check_sleep(self) -> bool:
+        """
+        Determine if it's time to check sleep conditions (Windows 10 only).
+        Returns True if enough time has passed since last check.
+        """
+        # Check if feature is enabled
+        if not hasattr(self.settings, 'power') or not self.settings.power:
+            return False
+        
+        if not getattr(self.settings.power, 'windows10_managed_sleep_enabled', False):
+            return False
+        
+        # Check if enough time has passed
+        current_time = time.time()
+        check_interval = getattr(self.settings.power, 'sleep_check_interval_seconds', 120)
+        
+        elapsed = current_time - self.last_sleep_check_time
+        return elapsed >= check_interval
+    
+    def _check_and_sleep_if_appropriate(self):
+        """
+        Check if system should sleep and force sleep if conditions are met.
+        This is called periodically while listening for wake words (Windows 10 only).
+        """
+        self.last_sleep_check_time = time.time()
+        
+        try:
+            # Get idle time for logging
+            idle_time = self.power_manager.get_system_idle_time()
+            app_logger.debug(f"Windows 10 sleep check: system idle for {idle_time:.1f} minutes")
+            
+            # Check and force sleep if appropriate
+            sleep_attempted = self.power_manager.force_sleep_if_appropriate()
+            
+            if sleep_attempted:
+                # If sleep was initiated, we likely won't reach here
+                # But if we do, it means sleep was rejected by Windows
+                app_logger.debug("Sleep attempt completed")
+                
+        except Exception as e:
+            app_logger.error(f"Error checking sleep conditions: {e}")
 
     def listen(self) -> bool:
         app_logger.info(f"Initializing audio stream for wake word detection (mic_idx: {self.input_device_index or 'default'}, sample_rate: {self.sample_rate} Hz)...")
@@ -204,6 +249,10 @@ class WakeWordDetector:
             app_logger.info(f"Listening for wake word '{self.active_model}'...")
 
             while True:
+                # Windows 10: Periodic sleep check
+                if self._should_check_sleep():
+                    self._check_and_sleep_if_appropriate()
+                
                 audio_chunk = self.stream.read(self.chunk_size, exception_on_overflow=False)
                 
                 if self.chunks_to_skip > 0:

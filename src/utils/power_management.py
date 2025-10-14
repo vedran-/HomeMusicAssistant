@@ -122,6 +122,148 @@ class WindowsPowerManager:
             except Exception as e:
                 app_logger.warning(f"PowerManager: Error applying override for '{b}': {e}")
     
+    def get_system_idle_time(self) -> float:
+        """
+        Get the system idle time in minutes using GetLastInputInfo API.
+        Returns the number of minutes since the last user input (mouse/keyboard).
+        """
+        if not self.is_windows:
+            return 0.0
+        
+        try:
+            class LASTINPUTINFO(ctypes.Structure):
+                _fields_ = [('cbSize', ctypes.c_uint), ('dwTime', ctypes.c_uint)]
+            
+            lii = LASTINPUTINFO()
+            lii.cbSize = ctypes.sizeof(LASTINPUTINFO)
+            
+            if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
+                app_logger.warning("PowerManager: Failed to get last input info")
+                return 0.0
+            
+            # Get current tick count and calculate idle time
+            current_ticks = ctypes.windll.kernel32.GetTickCount()
+            millis_since_input = current_ticks - lii.dwTime
+            
+            # Convert to minutes
+            minutes_idle = millis_since_input / 1000.0 / 60.0
+            
+            return minutes_idle
+            
+        except Exception as e:
+            app_logger.error(f"PowerManager: Error getting system idle time: {e}")
+            return 0.0
+    
+    def get_other_power_requests(self) -> List[str]:
+        """
+        Get list of power requests from other applications (not our audio driver).
+        Returns list of strings describing what's blocking sleep.
+        """
+        if not self.is_windows:
+            return []
+        
+        try:
+            output = self._powercfg_requests()
+            if not output:
+                return []
+            
+            # Extract all SYSTEM blockers
+            all_blockers = self._extract_system_driver_blockers(output)
+            
+            # Filter to only blockers that are NOT our audio driver
+            # Our audio driver typically shows as something like "Realtek High Definition Audio" or similar
+            # We want to exclude common audio driver patterns that are likely ours
+            other_blockers = []
+            for blocker in all_blockers:
+                blocker_lower = blocker.lower()
+                # Skip common audio driver patterns (these are likely our recording)
+                if any(pattern in blocker_lower for pattern in [
+                    'audio', 'sound', 'realtek', 'conexant', 'idt', 'via hd audio'
+                ]):
+                    # This might be our audio recording driver - skip it
+                    app_logger.debug(f"PowerManager: Skipping audio driver blocker: {blocker}")
+                    continue
+                # Keep other blockers
+                other_blockers.append(blocker)
+            
+            return other_blockers
+            
+        except Exception as e:
+            app_logger.error(f"PowerManager: Error getting power requests: {e}")
+            return []
+    
+    def should_allow_sleep(self) -> Tuple[bool, str]:
+        """
+        Determine if system should be allowed to sleep based on idle time and other blockers.
+        Returns (should_sleep: bool, reason: str)
+        """
+        if not self.is_windows:
+            return (False, "Not Windows")
+        
+        if not self._is_windows_10():
+            return (False, "Not Windows 10")
+        
+        if not self.power_settings:
+            return (False, "No power settings configured")
+        
+        if not getattr(self.power_settings, 'windows10_managed_sleep_enabled', False):
+            return (False, "Windows 10 managed sleep disabled in config")
+        
+        # Check idle time
+        idle_minutes = self.get_system_idle_time()
+        threshold = getattr(self.power_settings, 'idle_timeout_minutes', 10)
+        
+        if idle_minutes < threshold:
+            return (False, f"Not idle enough ({idle_minutes:.1f}min < {threshold}min)")
+        
+        # Check for other blockers
+        other_blockers = self.get_other_power_requests()
+        
+        if other_blockers:
+            blockers_str = ", ".join(other_blockers[:3])  # Show first 3
+            if len(other_blockers) > 3:
+                blockers_str += f" (+{len(other_blockers) - 3} more)"
+            return (False, f"Other apps blocking: {blockers_str}")
+        
+        # All conditions met
+        return (True, f"Idle {idle_minutes:.1f}min, no other blockers")
+    
+    def force_sleep_if_appropriate(self) -> bool:
+        """
+        Force system to sleep if all conditions are met (Windows 10 only).
+        Returns True if sleep was attempted, False otherwise.
+        """
+        should_sleep, reason = self.should_allow_sleep()
+        
+        app_logger.debug(f"PowerManager: Sleep check - {reason}")
+        
+        if not should_sleep:
+            return False
+        
+        # All conditions met - attempt to force sleep
+        try:
+            app_logger.info(f"PowerManager: Forcing system sleep ({reason})")
+            
+            # SetSuspendState(hibernate, forceCritical, disableWakeEvent)
+            # hibernate=False: sleep mode (not hibernate)
+            # forceCritical=False: apps can still prevent sleep if needed
+            # disableWakeEvent=False: allow wake events
+            result = ctypes.windll.PowrProf.SetSuspendState(False, False, False)
+            
+            if result == 0:
+                # SetSuspendState returns 0 on success
+                # If we reach here, sleep was initiated successfully
+                # (though we likely won't see this log as system will be sleeping)
+                app_logger.info("PowerManager: Sleep initiated successfully")
+                return True
+            else:
+                app_logger.warning(f"PowerManager: SetSuspendState returned {result}")
+                return False
+                
+        except Exception as e:
+            app_logger.error(f"PowerManager: Error forcing sleep: {e}")
+            return False
+    
     def allow_system_sleep(self) -> bool:
         """
         Allow the system to sleep normally while keeping the application running.
@@ -231,6 +373,24 @@ class CrossPlatformPowerManager:
         """Reset to default power management behavior."""
         if self.power_manager:
             return self.power_manager.reset_power_state()
+        return False
+    
+    def get_system_idle_time(self) -> float:
+        """Get system idle time in minutes (Windows only)."""
+        if self.power_manager and hasattr(self.power_manager, 'get_system_idle_time'):
+            return self.power_manager.get_system_idle_time()
+        return 0.0
+    
+    def should_allow_sleep(self) -> Tuple[bool, str]:
+        """Check if system should be allowed to sleep (Windows 10 only)."""
+        if self.power_manager and hasattr(self.power_manager, 'should_allow_sleep'):
+            return self.power_manager.should_allow_sleep()
+        return (False, "Platform not supported")
+    
+    def force_sleep_if_appropriate(self) -> bool:
+        """Force sleep if all conditions are met (Windows 10 only)."""
+        if self.power_manager and hasattr(self.power_manager, 'force_sleep_if_appropriate'):
+            return self.power_manager.force_sleep_if_appropriate()
         return False
 
 

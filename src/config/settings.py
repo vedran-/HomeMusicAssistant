@@ -49,11 +49,17 @@ class PowerSettings(BaseModel):
     - auto_override_windows10_audio_blockers: when true and elevated, auto-applies request override for audio driver blocks on Win10.
     - allow_sleep_during_capture: when true, allow system sleep while recording command audio (not only during passive wake listening).
     - diagnose_on_startup: when true, runs diagnostics/override logic on startup.
+    - windows10_managed_sleep_enabled: when true, app monitors idle time and forces sleep on Windows 10 when appropriate.
+    - idle_timeout_minutes: how long user must be idle before considering sleep (minutes).
+    - sleep_check_interval_seconds: how often to check sleep conditions while listening for wake word (seconds).
     """
     log_power_requests: bool = Field(default=False)
     auto_override_windows10_audio_blockers: bool = Field(default=True)
     allow_sleep_during_capture: bool = Field(default=True)
     diagnose_on_startup: bool = Field(default=True)
+    windows10_managed_sleep_enabled: bool = Field(default=True, description="Enable Windows 10 intelligent sleep management")
+    idle_timeout_minutes: int = Field(default=10, description="Minutes of idle time before allowing sleep on Windows 10")
+    sleep_check_interval_seconds: int = Field(default=120, description="How often to check sleep conditions on Windows 10 (seconds)")
 
 class TodoSettings(BaseModel):
     """TODO list configuration."""
