@@ -19,7 +19,7 @@ class WakeWordDetector:
         self.power_manager = CrossPlatformPowerManager(settings)
         
         # Limit to only supported wake word models - alexa first as default
-        self.supported_models = ["alexa", "hey_jarvis"]
+        self.supported_models = ["hey_kitt", "alexa", "hey_jarvis"]
         self.active_model = None
         
         # Try to ensure the model directory exists
