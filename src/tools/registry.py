@@ -15,10 +15,10 @@ from typing import Dict, Any, Optional, List, Tuple, Union
 from pathlib import Path
 from datetime import datetime
 
-from src.config.settings import AppSettings
-from src.utils.logger import app_logger
-from src.tools.music_controller_api import YouTubeMusicAPIController
-from src.tools.todo_manager import TodoManager
+from ..config.settings import AppSettings
+from ..utils.logger import app_logger
+from .music_controller_api import YouTubeMusicAPIController
+from .todo_manager import TodoManager
 from ..memory.memory_manager import MemoryManager
 from .utils import run_ahk_script
 

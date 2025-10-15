@@ -1,6 +1,6 @@
 import sys
 from loguru import logger
-from src.config.settings import LoggingSettings, load_settings
+from ..config.settings import LoggingSettings, load_settings
 
 def setup_logger():
     # Load logging settings from the global AppSettings

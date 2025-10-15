@@ -16,11 +16,11 @@ import shutil
 from pathlib import Path
 
 # Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
-from src.tools.todo_manager import TodoManager
-from src.config.settings import load_settings
-from src.tools.registry import ToolRegistry
+from tools.todo_manager import TodoManager
+from ..config.settings import load_settings
+from tools.registry import ToolRegistry
 
 
 def print_separator(title=""):
@@ -36,9 +36,14 @@ def print_separator(title=""):
 def test_todo_manager_basic():
     """Test basic TodoManager functionality."""
     print_separator("TEST 1: Basic TodoManager Functionality")
-    
+
     # Use temporary directory for testing
     test_dir = "./test_todos_temp"
+
+    # Clean up any existing test data
+    if os.path.exists(test_dir):
+        shutil.rmtree(test_dir)
+
     manager = TodoManager(data_dir=test_dir)
     
     # Test 1: Add simple task
@@ -114,7 +119,9 @@ def test_todo_manager_basic():
     print("\n9. Checking remaining tasks...")
     success, msg, tasks, total = manager.list_tasks()
     print(f"   Remaining tasks: {total}")
+    print(f"   Task descriptions: {[t.description for t in tasks]}")
     # After completing "Finish report" and "Call dentist", only "Buy milk" remains
+    # Tasks are sorted by priority: high -> medium -> low -> none
     assert total == 1, f"Expected 1 remaining task, got {total}"
     assert tasks[0].description == "Buy milk", "Remaining task should be 'Buy milk'"
     

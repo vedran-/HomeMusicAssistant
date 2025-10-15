@@ -11,8 +11,8 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-from tools.utils import GetSystemVolume, SetSystemVolume
-from utils.logger import app_logger, configure_logging
+from ..tools.utils import GetSystemVolume, SetSystemVolume
+from ..utils.logger import app_logger, configure_logging
 
 def test_volume_fire_and_forget():
     """Test that SetSystemVolume with duration is fire and forget."""

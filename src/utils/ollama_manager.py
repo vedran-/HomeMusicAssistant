@@ -5,7 +5,7 @@ import threading
 import time
 import psutil
 from typing import Optional
-from ..utils.logger import app_logger
+from .logger import app_logger
 
 
 class OllamaManager:
