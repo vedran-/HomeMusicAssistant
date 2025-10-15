@@ -53,28 +53,51 @@ class WindowsPowerManager:
     def _powercfg_requests(self) -> str:
         try:
             completed = subprocess.run(["powercfg", "/requests"], capture_output=True, text=True, shell=False)
+
+            # Check if command failed due to lack of admin rights
+            if completed.returncode != 0 and "administrator privileges" in completed.stderr.lower():
+                app_logger.warning("PowerManager: powercfg /requests requires administrator privileges. Sleep management may not work correctly.")
+                app_logger.warning("PowerManager: Please run the application as administrator or disable Windows 10 managed sleep.")
+                return ""
+
             return (completed.stdout or "") + ("\n" + completed.stderr if completed.stderr else "")
         except Exception as e:
             app_logger.warning(f"PowerManager: Failed to run powercfg /requests: {e}")
             return ""
 
-    def _extract_system_driver_blockers(self, requests_output: str) -> List[str]:
+    def _extract_section_blockers(self, requests_output: str, section_name: str) -> List[str]:
+        """
+        Extract blockers from any section of powercfg output.
+        Args:
+            requests_output: Raw output from powercfg /requests
+            section_name: Section header to parse (e.g., "SYSTEM:", "EXECUTION:")
+        Returns:
+            List of blocker strings from that section
+        """
         lines = requests_output.splitlines()
         blockers: List[str] = []
-        in_system = False
+        in_section = False
         for line in lines:
             stripped = line.strip()
             if not stripped:
                 # Blank line resets section
-                in_system = False
+                in_section = False
                 continue
             if stripped.upper().endswith(":"):
                 # Section header
-                in_system = stripped.upper().startswith("SYSTEM:")
+                in_section = stripped.upper() == section_name.upper()
                 continue
-            if in_system and stripped.lower() != "none.":
+            if in_section and stripped.lower() != "none.":
                 blockers.append(stripped)
         return blockers
+
+    def _extract_system_driver_blockers(self, requests_output: str) -> List[str]:
+        """Extract SYSTEM section blockers from powercfg output."""
+        return self._extract_section_blockers(requests_output, "SYSTEM:")
+
+    def _extract_execution_blockers(self, requests_output: str) -> List[str]:
+        """Extract EXECUTION section blockers from powercfg output."""
+        return self._extract_section_blockers(requests_output, "EXECUTION:")
 
     def _diagnose_and_optionally_override(self) -> None:
         if not self.is_windows:
@@ -158,98 +181,160 @@ class WindowsPowerManager:
         """
         Get list of power requests from other applications (not our audio driver).
         Returns list of strings describing what's blocking sleep.
+
+        Analyzes all power request categories that can block system sleep:
+        - SYSTEM: System-level requests (drivers) - can block sleep
+        - EXECUTION: Application-level requests (processes) - can block sleep
+        - AWAYMODE: Away mode requests - can block sleep
+        - PERFBOOST: Performance boost requests - can block sleep
+        - DISPLAY: Display requests - usually don't block system sleep
+        - ACTIVELOCKSCREEN: Lock screen requests - usually don't block system sleep
         """
         if not self.is_windows:
             return []
-        
+
         try:
             output = self._powercfg_requests()
             if not output:
                 return []
-            
-            # Extract all SYSTEM blockers
-            all_blockers = self._extract_system_driver_blockers(output)
-            
-            # Filter to only blockers that are NOT our audio driver
-            # Our audio driver typically shows as something like "Realtek High Definition Audio" or similar
-            # We want to exclude common audio driver patterns that are likely ours
+
+            # Parse all categories that can block system sleep
+            system_blockers = self._extract_section_blockers(output, "SYSTEM:")
+            execution_blockers = self._extract_section_blockers(output, "EXECUTION:")
+            awaymode_blockers = self._extract_section_blockers(output, "AWAYMODE:")
+            perfboost_blockers = self._extract_section_blockers(output, "PERFBOOST:")
+
+            # DISPLAY and ACTIVELOCKSCREEN typically don't block system sleep
+            # (they only prevent display sleep, not system sleep)
+            display_blockers = self._extract_section_blockers(output, "DISPLAY:")
+            lockscreen_blockers = self._extract_section_blockers(output, "ACTIVELOCKSCREEN:")
+
+            app_logger.debug(f"PowerManager: SYSTEM={len(system_blockers)}, EXECUTION={len(execution_blockers)}, AWAYMODE={len(awaymode_blockers)}, PERFBOOST={len(perfboost_blockers)}")
+            app_logger.debug(f"PowerManager: DISPLAY={len(display_blockers)}, ACTIVELOCKSCREEN={len(lockscreen_blockers)} (ignored for sleep blocking)")
+
+            # Combine only sleep-blocking categories
+            all_blockers = system_blockers + execution_blockers + awaymode_blockers + perfboost_blockers
+
+            # Filter to only blockers that are NOT our audio recording
             other_blockers = []
             for blocker in all_blockers:
                 blocker_lower = blocker.lower()
-                # Skip common audio driver patterns (these are likely our recording)
-                if any(pattern in blocker_lower for pattern in [
-                    'audio', 'sound', 'realtek', 'conexant', 'idt', 'via hd audio'
+
+                # Skip our audio recording drivers (SYSTEM level)
+                if blocker in system_blockers and any(pattern in blocker_lower for pattern in [
+                    'audio', 'sound', 'realtek', 'conexant', 'idt', 'via hd audio',
+                    'high definition audio', 'hdaudio'
                 ]):
-                    # This might be our audio recording driver - skip it
-                    app_logger.debug(f"PowerManager: Skipping audio driver blocker: {blocker}")
+                    app_logger.debug(f"PowerManager: Skipping our audio driver: {blocker}")
                     continue
-                # Keep other blockers
+
+                # Skip our own process if it appears in EXECUTION (unlikely but possible)
+                if 'homemusicassistant' in blocker_lower or 'python' in blocker_lower:
+                    app_logger.debug(f"PowerManager: Skipping our process: {blocker}")
+                    continue
+
+                # Skip AnyDesk or remote desktop software that might be related to our testing
+                if 'anydesk' in blocker_lower:
+                    app_logger.debug(f"PowerManager: Skipping remote desktop software: {blocker}")
+                    continue
+
+                # Keep other blockers (music players, video players, etc.)
                 other_blockers.append(blocker)
-            
+
+            app_logger.debug(f"PowerManager: Final sleep blockers: {other_blockers}")
             return other_blockers
-            
+
         except Exception as e:
             app_logger.error(f"PowerManager: Error getting power requests: {e}")
             return []
     
-    def should_allow_sleep(self) -> Tuple[bool, str]:
+    def should_allow_sleep(self, conversation_active: bool = False) -> Tuple[bool, str]:
         """
         Determine if system should be allowed to sleep based on idle time and other blockers.
         Returns (should_sleep: bool, reason: str)
+
+        Args:
+            conversation_active: True if user is currently speaking to assistant
         """
         if not self.is_windows:
             return (False, "Not Windows")
-        
+
         if not self._is_windows_10():
             return (False, "Not Windows 10")
-        
+
         if not self.power_settings:
             return (False, "No power settings configured")
-        
+
         if not getattr(self.power_settings, 'windows10_managed_sleep_enabled', False):
             return (False, "Windows 10 managed sleep disabled in config")
-        
-        # Check idle time
+
+        # Check idle time (but account for conversation activity)
         idle_minutes = self.get_system_idle_time()
         threshold = getattr(self.power_settings, 'idle_timeout_minutes', 10)
-        
-        if idle_minutes < threshold:
-            return (False, f"Not idle enough ({idle_minutes:.1f}min < {threshold}min)")
-        
+
+        # If user is actively conversing with assistant, extend idle threshold
+        if conversation_active:
+            # Add 5 minutes to idle threshold during conversation
+            conversation_threshold = threshold + 5
+            if idle_minutes < conversation_threshold:
+                return (False, f"Conversation active - idle {idle_minutes:.1f}min < {conversation_threshold}min threshold")
+        else:
+            if idle_minutes < threshold:
+                return (False, f"Not idle enough ({idle_minutes:.1f}min < {threshold}min)")
+
         # Check for other blockers
         other_blockers = self.get_other_power_requests()
-        
+
+        # Warn if we might not have full power request information
+        if not other_blockers and not self._is_elevated():
+            app_logger.debug("PowerManager: Running without admin rights - may not detect all power requests")
+
         if other_blockers:
+            # Log what types of blockers were found for debugging
+            system_blockers = [b for b in other_blockers if any(pattern in b.lower() for pattern in ['driver', 'device'])]
+            execution_blockers = [b for b in other_blockers if any(pattern in b.lower() for pattern in ['exe', 'process'])]
+
+            if system_blockers:
+                app_logger.debug(f"PowerManager: SYSTEM blockers preventing sleep: {system_blockers}")
+            if execution_blockers:
+                app_logger.debug(f"PowerManager: EXECUTION blockers preventing sleep: {execution_blockers}")
+
             blockers_str = ", ".join(other_blockers[:3])  # Show first 3
             if len(other_blockers) > 3:
                 blockers_str += f" (+{len(other_blockers) - 3} more)"
             return (False, f"Other apps blocking: {blockers_str}")
-        
+
         # All conditions met
-        return (True, f"Idle {idle_minutes:.1f}min, no other blockers")
+        if conversation_active:
+            return (True, f"Conversation ended, idle {idle_minutes:.1f}min, no other blockers")
+        else:
+            return (True, f"Idle {idle_minutes:.1f}min, no other blockers")
     
-    def force_sleep_if_appropriate(self) -> bool:
+    def force_sleep_if_appropriate(self, conversation_active: bool = False) -> bool:
         """
         Force system to sleep if all conditions are met (Windows 10 only).
         Returns True if sleep was attempted, False otherwise.
+
+        Args:
+            conversation_active: True if user is currently interacting with assistant
         """
-        should_sleep, reason = self.should_allow_sleep()
-        
+        should_sleep, reason = self.should_allow_sleep(conversation_active)
+
         app_logger.debug(f"PowerManager: Sleep check - {reason}")
-        
+
         if not should_sleep:
             return False
-        
+
         # All conditions met - attempt to force sleep
         try:
             app_logger.info(f"PowerManager: Forcing system sleep ({reason})")
-            
+
             # SetSuspendState(hibernate, forceCritical, disableWakeEvent)
             # hibernate=False: sleep mode (not hibernate)
             # forceCritical=False: apps can still prevent sleep if needed
             # disableWakeEvent=False: allow wake events
             result = ctypes.windll.PowrProf.SetSuspendState(False, False, False)
-            
+
             if result == 0:
                 # SetSuspendState returns 0 on success
                 # If we reach here, sleep was initiated successfully
@@ -259,7 +344,7 @@ class WindowsPowerManager:
             else:
                 app_logger.warning(f"PowerManager: SetSuspendState returned {result}")
                 return False
-                
+
         except Exception as e:
             app_logger.error(f"PowerManager: Error forcing sleep: {e}")
             return False
@@ -381,16 +466,16 @@ class CrossPlatformPowerManager:
             return self.power_manager.get_system_idle_time()
         return 0.0
     
-    def should_allow_sleep(self) -> Tuple[bool, str]:
+    def should_allow_sleep(self, conversation_active: bool = False) -> Tuple[bool, str]:
         """Check if system should be allowed to sleep (Windows 10 only)."""
         if self.power_manager and hasattr(self.power_manager, 'should_allow_sleep'):
-            return self.power_manager.should_allow_sleep()
+            return self.power_manager.should_allow_sleep(conversation_active)
         return (False, "Platform not supported")
-    
-    def force_sleep_if_appropriate(self) -> bool:
+
+    def force_sleep_if_appropriate(self, conversation_active: bool = False) -> bool:
         """Force sleep if all conditions are met (Windows 10 only)."""
         if self.power_manager and hasattr(self.power_manager, 'force_sleep_if_appropriate'):
-            return self.power_manager.force_sleep_if_appropriate()
+            return self.power_manager.force_sleep_if_appropriate(conversation_active)
         return False
 
 

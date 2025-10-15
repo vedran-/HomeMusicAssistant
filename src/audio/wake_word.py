@@ -36,6 +36,8 @@ class WakeWordDetector:
         
         # Windows 10 sleep management tracking
         self.last_sleep_check_time = 0
+        self.conversation_active = False
+        self.conversation_start_time = 0
         
         if self.sample_rate != 16000:
             app_logger.warning(f"OpenWakeWord typically expects 16000 Hz, but configured sample rate is {self.sample_rate}. This might affect performance.")
@@ -204,26 +206,41 @@ class WakeWordDetector:
         elapsed = current_time - self.last_sleep_check_time
         return elapsed >= check_interval
     
+    def _start_conversation(self):
+        """Mark the start of a conversation for Windows 10 sleep management."""
+        self.conversation_active = True
+        self.conversation_start_time = time.time()
+        app_logger.debug("Windows 10: Conversation started - extending idle timeout")
+
+    def _end_conversation(self):
+        """Mark the end of a conversation for Windows 10 sleep management."""
+        if self.conversation_active:
+            self.conversation_active = False
+            conversation_duration = time.time() - self.conversation_start_time
+            app_logger.debug(f"Windows 10: Conversation ended after {conversation_duration:.1f} seconds")
+        else:
+            app_logger.debug("Windows 10: Conversation end called but no active conversation")
+
     def _check_and_sleep_if_appropriate(self):
         """
         Check if system should sleep and force sleep if conditions are met.
         This is called periodically while listening for wake words (Windows 10 only).
         """
         self.last_sleep_check_time = time.time()
-        
+
         try:
             # Get idle time for logging
             idle_time = self.power_manager.get_system_idle_time()
             app_logger.debug(f"Windows 10 sleep check: system idle for {idle_time:.1f} minutes")
-            
-            # Check and force sleep if appropriate
-            sleep_attempted = self.power_manager.force_sleep_if_appropriate()
-            
+
+            # Check and force sleep if appropriate, passing conversation state
+            sleep_attempted = self.power_manager.force_sleep_if_appropriate(self.conversation_active)
+
             if sleep_attempted:
                 # If sleep was initiated, we likely won't reach here
                 # But if we do, it means sleep was rejected by Windows
                 app_logger.debug("Sleep attempt completed")
-                
+
         except Exception as e:
             app_logger.error(f"Error checking sleep conditions: {e}")
 
@@ -273,10 +290,10 @@ class WakeWordDetector:
                     app_logger.info(f"Wake word '{self.active_model}' detected with score {prediction[self.active_model]:.2f}!")
 
                     self.stop_listening() # Stop microphone listening first
-                    
+
                     # Improved reset to prevent continuous detection
                     self._reset_model_state()
-                    
+
                     # Stop any ongoing TTS playback
                     if self.tts_client:
                         # Check is_speaking with the lock if possible, or rely on its internal thread-safety
@@ -285,12 +302,15 @@ class WakeWordDetector:
                             app_logger.info("Wake word detected: Stopping ongoing TTS playback.")
                             self.tts_client.stop_speaking()
 
+                    # Start conversation tracking for Windows 10 sleep management
+                    self._start_conversation()
+
                     # Add a longer cooldown period to prevent immediate re-triggering
                     # This gives time for any residual audio/echo to clear
                     self.chunks_to_skip = 25 # 25 * 80ms = 2000ms cooldown
 
                     play_wake_word_accepted_sound() # Play sound after stopping other things
-                    
+
                     return True
 
         except Exception as e:

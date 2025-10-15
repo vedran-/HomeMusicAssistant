@@ -16,9 +16,11 @@ On Windows 10, continuous audio recording for wake word detection creates a driv
 Instead of trying to work around Windows 10's sleep blocking, we implement our own sleep management logic that:
 
 1. **Monitors system idle time** - Uses Windows `GetLastInputInfo` API to track user activity
-2. **Checks for other applications** - Parses `powercfg /requests` to detect music players, video players, etc.
-3. **Makes intelligent sleep decisions** - Only forces sleep when:
-   - User has been idle for configured timeout (default: 10 minutes)
+2. **Tracks conversation activity** - Detects when user is speaking to the assistant
+3. **Checks for other applications** - Parses `powercfg /requests` to detect music players, video players, etc.
+4. **Makes intelligent sleep decisions** - Only forces sleep when:
+   - User has been idle for configured timeout (default: 10 minutes) OR
+   - Conversation has ended and user is idle (5 minutes extended timeout during conversation)
    - No other applications are blocking sleep (no music, videos, etc.)
    - Running on Windows 10 (Windows 11 doesn't need this)
    - Feature is enabled in configuration
@@ -261,14 +263,34 @@ To test actual sleep behavior:
 5. ✅ `src/test_windows10_sleep.py` - Created test suite (NEW FILE)
 6. ✅ `docs/WINDOWS10_SLEEP_IMPLEMENTATION.md` - This document (NEW FILE)
 
+## Conversation Awareness
+
+A key feature of this implementation is **conversation awareness** - the system recognizes when you're actively speaking to the assistant and adjusts sleep behavior accordingly:
+
+### How It Works
+
+1. **Wake word detected** → Conversation starts (idle timer extended)
+2. **Audio capture active** → Conversation continues (idle timer extended)
+3. **Command processing** → Conversation continues (idle timer extended)
+4. **Back to wake word detection** → Conversation ends (normal idle timer)
+
+### Sleep Logic During Conversation
+
+- **Normal idle timeout**: 10 minutes (configurable)
+- **During conversation**: 15 minutes (10 + 5 minute extension)
+- **After conversation ends**: Returns to normal 10-minute timeout
+
+This ensures the computer won't sleep while you're actively speaking to the assistant, but will sleep normally once the conversation ends.
+
 ## Key Features
 
-✅ **No burst recording** - Continuous wake word detection  
-✅ **Respects other apps** - Checks for music/video playback  
-✅ **Respects user activity** - Monitors actual idle time  
-✅ **Windows 10 specific** - Doesn't affect Windows 11  
-✅ **Configurable** - Users can adjust all thresholds  
-✅ **Transparent** - Detailed logging of all decisions  
+✅ **No burst recording** - Continuous wake word detection
+✅ **Respects other apps** - Checks for music/video playback
+✅ **Respects user activity** - Monitors actual idle time
+✅ **Conversation aware** - Extends timeout during active conversations
+✅ **Windows 10 specific** - Doesn't affect Windows 11
+✅ **Configurable** - Users can adjust all thresholds
+✅ **Transparent** - Detailed logging of all decisions
 ✅ **Safe** - Only sleeps when all conditions are right  
 ✅ **No admin rights required** - Works for all users  
 

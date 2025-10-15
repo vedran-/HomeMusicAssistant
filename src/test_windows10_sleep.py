@@ -73,22 +73,48 @@ def test_power_requests_parsing():
             print(raw_output[:500])
             print("-" * 60)
         
-        # Get parsed blockers
-        all_blockers = power_manager._extract_system_driver_blockers(raw_output)
-        print(f"\n✓ All SYSTEM blockers found: {len(all_blockers)}")
-        for blocker in all_blockers:
+        # Get parsed blockers from all categories
+        system_blockers = power_manager._extract_system_driver_blockers(raw_output)
+        execution_blockers = power_manager._extract_execution_blockers(raw_output)
+        awaymode_blockers = power_manager._extract_section_blockers(raw_output, "AWAYMODE:")
+        perfboost_blockers = power_manager._extract_section_blockers(raw_output, "PERFBOOST:")
+        display_blockers = power_manager._extract_section_blockers(raw_output, "DISPLAY:")
+        lockscreen_blockers = power_manager._extract_section_blockers(raw_output, "ACTIVELOCKSCREEN:")
+
+        print(f"\n✓ SYSTEM blockers found: {len(system_blockers)}")
+        for blocker in system_blockers:
             print(f"  - {blocker}")
-        
-        # Get filtered blockers (excluding audio)
+
+        print(f"\n✓ EXECUTION blockers found: {len(execution_blockers)}")
+        for blocker in execution_blockers:
+            print(f"  - {blocker}")
+
+        print(f"\n✓ AWAYMODE blockers found: {len(awaymode_blockers)}")
+        for blocker in awaymode_blockers:
+            print(f"  - {blocker}")
+
+        print(f"\n✓ PERFBOOST blockers found: {len(perfboost_blockers)}")
+        for blocker in perfboost_blockers:
+            print(f"  - {blocker}")
+
+        print(f"\n✓ DISPLAY blockers found: {len(display_blockers)} (ignored for sleep)")
+        for blocker in display_blockers:
+            print(f"  - {blocker}")
+
+        print(f"\n✓ ACTIVELOCKSCREEN blockers found: {len(lockscreen_blockers)} (ignored for sleep)")
+        for blocker in lockscreen_blockers:
+            print(f"  - {blocker}")
+
+        # Get filtered blockers (excluding our audio) - only sleep-blocking categories
         other_blockers = power_manager.get_other_power_requests()
-        print(f"\n✓ Non-audio blockers: {len(other_blockers)}")
+        print(f"\n✓ Sleep-blocking categories (SYSTEM+EXECUTION+AWAYMODE+PERFBOOST): {len(other_blockers)}")
         if other_blockers:
             for blocker in other_blockers:
                 print(f"  - {blocker}")
             print("\n⚠️  These apps are currently blocking sleep:")
-            print("  (Try closing them and running the test again)")
+            print("  (Computer should NOT sleep while these are active)")
         else:
-            print("  None - only audio driver blocking (expected when recording)")
+            print("  None - only our audio recording blocking (computer can sleep)")
         
     except Exception as e:
         print(f"❌ Error: {e}")
@@ -169,7 +195,11 @@ def test_cross_platform_wrapper():
         
         should_sleep, reason = power_manager.should_allow_sleep()
         print(f"✓ should_allow_sleep(): {should_sleep} - {reason}")
-        
+
+        # Test with conversation active (should extend idle timeout)
+        should_sleep_conversation, reason_conversation = power_manager.should_allow_sleep(conversation_active=True)
+        print(f"✓ should_allow_sleep(conversation_active=True): {should_sleep_conversation} - {reason_conversation}")
+
         # Don't actually test force_sleep (would put computer to sleep!)
         print("⚠️  Skipping force_sleep_if_appropriate() test (would sleep the computer)")
         

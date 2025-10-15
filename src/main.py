@@ -177,11 +177,16 @@ def run_voice_assistant(settings: AppSettings):
         app_logger.info("🎤 Voice control system ready! Say 'alexa' or 'hey jarvis' to activate.")
         
         while True:
+            # End any previous conversation when starting wake word detection
+            wake_detector._end_conversation()
+
             app_logger.info("Waiting for wake word ('alexa' or 'hey jarvis')...")
-            
+
             # Wait for wake word
             if not wake_detector.listen():
                 app_logger.error("Wake word detection failed. Retrying...")
+                # End conversation tracking on wake word detection failure
+                wake_detector._end_conversation()
                 time.sleep(1)
                 continue
             
@@ -199,6 +204,8 @@ def run_voice_assistant(settings: AppSettings):
                 app_logger.error("Audio capture failed. Returning to wake word detection.")
                 # Restore volume even if audio capture failed
                 SetSystemVolume(system_volume, duration=1.0, steps=15)
+                # End conversation tracking on audio capture failure
+                wake_detector._end_conversation()
                 continue
 
             # Check for session timeout
@@ -216,6 +223,8 @@ def run_voice_assistant(settings: AppSettings):
             transcript = transcriber.transcribe_audio(audio_file)
             if not transcript:
                 app_logger.error("Transcription failed. Returning to wake word detection.")
+                # End conversation tracking on transcription failure
+                wake_detector._end_conversation()
                 continue
                 
             app_logger.info(f"📝 User said: '{transcript}'")
@@ -322,6 +331,8 @@ def run_voice_assistant(settings: AppSettings):
 
             # Small delay before starting to listen for wake word again
             app_logger.info("⏳ Ready for next command...")
+            # End conversation tracking after successful command processing
+            wake_detector._end_conversation()
             time.sleep(0.5)
             
     #except KeyboardInterrupt:
