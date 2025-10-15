@@ -56,5 +56,13 @@
   "tavily_settings": {
     "enabled": true,
     "api_key": "YOUR_TAVILY_API_KEY"
+  },
+  "prompt_data": {
+    "user_name": "",
+    "geo_location": {
+      "city": "",
+      "country": "",
+      "timezone": ""
+    }
   }
 }

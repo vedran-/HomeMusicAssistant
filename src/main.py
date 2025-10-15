@@ -190,7 +190,7 @@ def run_voice_assistant(settings: AppSettings):
     wake_detector, audio_capturer, transcriber, llm_client, tool_registry, tts_client, memory_manager = initialize_components(settings)
     
     # Get the system prompt and available tools for the LLM
-    system_prompt = get_system_prompt()
+    system_prompt = get_system_prompt(settings)
     available_tools = get_available_tools()
     
     play_startup_sound()

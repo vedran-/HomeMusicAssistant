@@ -95,7 +95,7 @@ class AudioCaptureTranscriptionTester:
                 
             # Process with LLM
             app_logger.info("🧠 Processing with LLM...")
-            system_prompt = get_system_prompt()
+            system_prompt = get_system_prompt(self.settings)
             available_tools = get_available_tools()
             
             tool_call = self.llm_client.process_transcript(transcript, system_prompt, available_tools)

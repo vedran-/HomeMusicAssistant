@@ -36,7 +36,7 @@ class ToolExecutionTester:
             self.settings = load_settings()
             self.llm_client = LiteLLMClient(self.settings)
             self.tool_registry = ToolRegistry(self.settings)
-            self.system_prompt = get_system_prompt()
+            self.system_prompt = get_system_prompt(self.settings)
             self.available_tools = get_available_tools()
             
             app_logger.info("✅ Tool execution tester initialized successfully")

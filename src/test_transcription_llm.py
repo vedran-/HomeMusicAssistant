@@ -141,7 +141,7 @@ class TranscriptionLLMTester:
         if not self.initialize_llm_client():
             return False
         
-        system_prompt = get_system_prompt()
+        system_prompt = get_system_prompt(self.settings)
         available_tools = get_available_tools()
         
         app_logger.info(f"📋 System prompt: {system_prompt[:100]}...")

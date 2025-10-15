@@ -23,7 +23,7 @@ def test_enhanced_play_commands():
     # Initialize components
     settings = load_settings()
     llm_client = LiteLLMClient(settings)
-    system_prompt = get_system_prompt()
+    system_prompt = get_system_prompt(settings)
     available_tools = get_available_tools()
     
     # Test cases that should all work now

@@ -19,7 +19,7 @@ class MusicControlToolTester:
         self.settings = load_settings(config_path)
         self.llm_client = LiteLLMClient(self.settings)
         self.tool_registry = ToolRegistry(self.settings)
-        self.system_prompt = get_system_prompt()
+        self.system_prompt = get_system_prompt(self.settings)
         self.available_tools = get_available_tools()
         
         app_logger.info("Music Control Tool Tester initialized")

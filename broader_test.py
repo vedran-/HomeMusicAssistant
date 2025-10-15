@@ -5,7 +5,7 @@ from src.llm.prompts import get_system_prompt, get_available_tools
 # Test multiple cases
 settings = load_settings()
 llm_client = LiteLLMClient(settings)
-system_prompt = get_system_prompt()
+system_prompt = get_system_prompt(settings)
 available_tools = get_available_tools()
 
 test_cases = [

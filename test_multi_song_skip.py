@@ -25,7 +25,7 @@ def test_multi_song_skip():
     settings = load_settings()
     llm_client = LiteLLMClient(settings)
     tool_registry = ToolRegistry(settings)
-    system_prompt = get_system_prompt()
+    system_prompt = get_system_prompt(settings)
     available_tools = get_available_tools()
     
     # Test cases for multi-song skipping

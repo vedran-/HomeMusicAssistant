@@ -71,6 +71,11 @@ class TavilySettings(BaseModel):
     enabled: bool = Field(default=True, description="Enable web search functionality")
     api_key: Optional[str] = Field(default=None, description="Tavily API key")
 
+class PromptDataSettings(BaseModel):
+    """Prompt data configuration for AI assistant."""
+    user_name: str = Field(default="", description="User's name for personalized AI prompts")
+    geo_location: Dict[str, str] = Field(default_factory=lambda: {"city": "", "country": "", "timezone": ""}, description="Geographic location data for AI prompts")
+
 class ScreenshotSettings(BaseModel):
     """Screenshot and vision analysis configuration."""
     enabled: bool = Field(default=True, description="Enable screenshot analysis")
@@ -180,6 +185,7 @@ class AppSettings(BaseModel):
     todo_settings: TodoSettings = Field(default_factory=TodoSettings)
     screenshot_settings: ScreenshotSettings = Field(default_factory=ScreenshotSettings)
     tavily_settings: TavilySettings = Field(default_factory=TavilySettings)
+    prompt_data: PromptDataSettings = Field(default_factory=PromptDataSettings)
 
 def load_settings(config_path: str = "config.json") -> AppSettings:
     # Try to load keys from environment first

@@ -1,10 +1,42 @@
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
-def get_system_prompt() -> str:
+def get_system_prompt(settings: Optional[Any] = None) -> str:
     """
     Returns the system prompt that instructs the LLM on its role and how to handle user requests.
+
+    Args:
+        settings: Application settings containing prompt data (user name and geo location)
+
+    Returns:
+        System prompt string with optional user context (name and location)
     """
+    # Build location and user context if available
+    context_parts = []
+
+    # Add user name if set
+    if settings and hasattr(settings, 'prompt_data') and settings.prompt_data.user_name:
+        context_parts.append(f"user_name: {settings.prompt_data.user_name}")
+
+    # Add location context if any geo location fields are set
+    if settings and hasattr(settings, 'prompt_data') and settings.prompt_data.geo_location:
+        geo = settings.prompt_data.geo_location
+        location_parts = []
+        if geo.get("city"):
+            location_parts.append(f"city: {geo['city']}")
+        if geo.get("country"):
+            location_parts.append(f"country: {geo['country']}")
+        if geo.get("timezone"):
+            location_parts.append(f"timezone: {geo['timezone']}")
+
+        if location_parts:
+            context_parts.append("LOCATION CONTEXT:\n- " + "\n- ".join(location_parts))
+
+    # Combine all context parts
+    context_section = ""
+    if context_parts:
+        context_section = f"\n\nUSER CONTEXT:\n- " + "\n- ".join(context_parts)
+
     return """You are a voice-controlled assistant named Alexa that helps control a computer. 
     
 Your job is to analyze the user's request (transcribed from speech) and determine which tool to call.
@@ -166,7 +198,7 @@ Examples:
 - "Find information about the Eiffel Tower" → web_search(query="Eiffel Tower information")
 - "What's the weather in Maribor?" → web_search(query="weather Maribor Slovenia current")
 
-Current date and time: """ + datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S")
+Current date and time: """ + datetime.now().strftime("%A, %Y-%m-%d %H:%M:%S") + context_section
 
 def get_available_tools() -> List[Dict[str, Any]]:
     """

@@ -50,7 +50,7 @@ class FullSystemTester:
             self.tool_registry = ToolRegistry(self.settings)
             
             # Get system prompt and tools
-            self.system_prompt = get_system_prompt()
+            self.system_prompt = get_system_prompt(self.settings)
             self.available_tools = get_available_tools()
             
             app_logger.info("✅ Full system tester initialized successfully")
