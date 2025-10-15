@@ -288,7 +288,7 @@ class TodoManager:
                 tasks = [t for t in tasks if t.priority == filter_priority]
             
             if filter_tag:
-                tasks = [t for t in tasks if filter_tag.lower() in [tag.lower() for tag in t.tags]]
+                tasks = [t for t in tasks if (filter_tag.lower() in [tag.lower() for tag in t.tags]) or (filter_tag.lower() in t.description.lower())]
             
             # Sort by priority: high -> medium -> low -> none
             priority_order = {'high': 0, 'medium': 1, 'low': 2, None: 3}
