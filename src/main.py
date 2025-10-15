@@ -1,6 +1,9 @@
 import os
 import sys
 import time
+import platform
+import ctypes
+import subprocess
 from typing import Optional, Dict, Any
 
 from src.config.settings import load_settings, AppSettings
@@ -18,6 +21,35 @@ from src.tts.piper_client import PiperTTSClient
 from src.memory.memory_manager import MemoryManager
 import uuid
 from datetime import datetime, timedelta
+
+
+def _is_admin() -> bool:
+    """Return True if current process has administrative token (Windows only)."""
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def _relaunch_as_admin_win10(cwd: str) -> bool:
+    """Relaunch this module elevated on Windows 10 preserving argv and cwd."""
+    # Reconstruct: python.exe -m src.main --elevated <original args...>
+    forwarded_args = [a for a in sys.argv[1:] if a != "--elevated"]
+    args = ["-m", "src.main", "--elevated", *forwarded_args]
+    params = subprocess.list2cmdline(args)
+    hinst = ctypes.windll.shell32.ShellExecuteW(
+        None, "runas", sys.executable, params, cwd, 1
+    )
+    return hinst > 32
+
+
+def ensure_admin_elevation_if_needed():
+    """On Windows 10, elevate at startup by relaunching via -m if not admin."""
+    if os.name == "nt" and platform.release() == "10" and "--elevated" not in sys.argv and not _is_admin():
+        original_cwd = os.getcwd()
+        ok = _relaunch_as_admin_win10(original_cwd)
+        # Exit current (non-elevated) process; new elevated instance will take over
+        sys.exit(0 if ok else 1)
 
 
 def initialize_components(settings: AppSettings):
@@ -346,10 +378,14 @@ def main():
     """Entry point for the application."""
     if True:
     #try:
+        # Ensure elevation on Windows 10 at startup (no-op on other OS)
+        ensure_admin_elevation_if_needed()
+
         # Determine config path
         config_path = "config.json"
-        if len(sys.argv) > 1:
-            config_path = sys.argv[1]
+        filtered_args = [a for a in sys.argv[1:] if a != "--elevated"]
+        if len(filtered_args) > 0:
+            config_path = filtered_args[0]
             
         # Load settings
         settings = load_settings(config_path=config_path)

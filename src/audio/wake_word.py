@@ -192,19 +192,14 @@ class WakeWordDetector:
         Determine if it's time to check sleep conditions (Windows 10 only).
         Returns True if enough time has passed since last check.
         """
-        # Check if feature is enabled
-        if not hasattr(self.settings, 'power') or not self.settings.power:
+        # Windows 10 sleep management is always enabled
+        if not self.power_manager._is_windows_10():
             return False
-        
-        if not getattr(self.settings.power, 'windows10_managed_sleep_enabled', False):
-            return False
-        
-        # Check if enough time has passed
+
+        # Check if enough time has passed (use fixed 120 second interval)
         current_time = time.time()
-        check_interval = getattr(self.settings.power, 'sleep_check_interval_seconds', 120)
-        
         elapsed = current_time - self.last_sleep_check_time
-        return elapsed >= check_interval
+        return elapsed >= 120  # Fixed 2-minute interval
     
     def _start_conversation(self):
         """Mark the start of a conversation for Windows 10 sleep management."""
@@ -335,14 +330,17 @@ class WakeWordDetector:
 
     def __del__(self):
         # Clean up PyAudio instance when the detector is garbage collected
-        self.stop_listening()
+        # Only attempt cleanup if the object was properly initialized
+        if hasattr(self, 'stream'):
+            self.stop_listening()
+
         if hasattr(self, 'pa') and self.pa:
             try:
                 self.pa.terminate()
                 app_logger.debug("PyAudio instance terminated for WakeWordDetector.")
             except Exception as e:
                 app_logger.error(f"Error terminating PyAudio instance in WakeWordDetector: {e}")
-        
+
         # Ensure power state is reset
         if hasattr(self, 'power_manager'):
             self.power_manager.reset_power_state()

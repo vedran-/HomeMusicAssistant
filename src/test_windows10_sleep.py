@@ -22,7 +22,7 @@ def test_idle_time_detection():
     print("="*60)
     
     if platform.system() != "Windows":
-        print("⚠️  Skipping - not on Windows")
+        print("WARNING  Skipping - not on Windows")
         return
     
     try:
@@ -30,7 +30,7 @@ def test_idle_time_detection():
         power_manager = WindowsPowerManager(power_settings=settings.power)
         
         idle_time = power_manager.get_system_idle_time()
-        print(f"✓ System idle time: {idle_time:.2f} minutes")
+        print(f"+ System idle time: {idle_time:.2f} minutes")
         print(f"  (Move your mouse/keyboard to reset this value)")
         
         # Wait a few seconds and check again
@@ -38,15 +38,15 @@ def test_idle_time_detection():
         time.sleep(5)
         
         idle_time_after = power_manager.get_system_idle_time()
-        print(f"✓ System idle time after 5 seconds: {idle_time_after:.2f} minutes")
+        print(f"+ System idle time after 5 seconds: {idle_time_after:.2f} minutes")
         
         if idle_time_after > idle_time:
-            print("✓ Idle time is increasing correctly")
+            print("+ Idle time is increasing correctly")
         else:
-            print("⚠️  User activity detected (idle time reset)")
+            print("WARNING  User activity detected (idle time reset)")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"ERROR Error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -58,7 +58,7 @@ def test_power_requests_parsing():
     print("="*60)
     
     if platform.system() != "Windows":
-        print("⚠️  Skipping - not on Windows")
+        print("WARNING  Skipping - not on Windows")
         return
     
     try:
@@ -81,43 +81,43 @@ def test_power_requests_parsing():
         display_blockers = power_manager._extract_section_blockers(raw_output, "DISPLAY:")
         lockscreen_blockers = power_manager._extract_section_blockers(raw_output, "ACTIVELOCKSCREEN:")
 
-        print(f"\n✓ SYSTEM blockers found: {len(system_blockers)}")
+        print(f"\n+ SYSTEM blockers found: {len(system_blockers)}")
         for blocker in system_blockers:
             print(f"  - {blocker}")
 
-        print(f"\n✓ EXECUTION blockers found: {len(execution_blockers)}")
+        print(f"\n+ EXECUTION blockers found: {len(execution_blockers)}")
         for blocker in execution_blockers:
             print(f"  - {blocker}")
 
-        print(f"\n✓ AWAYMODE blockers found: {len(awaymode_blockers)}")
+        print(f"\n+ AWAYMODE blockers found: {len(awaymode_blockers)}")
         for blocker in awaymode_blockers:
             print(f"  - {blocker}")
 
-        print(f"\n✓ PERFBOOST blockers found: {len(perfboost_blockers)}")
+        print(f"\n+ PERFBOOST blockers found: {len(perfboost_blockers)}")
         for blocker in perfboost_blockers:
             print(f"  - {blocker}")
 
-        print(f"\n✓ DISPLAY blockers found: {len(display_blockers)} (ignored for sleep)")
+        print(f"\n+ DISPLAY blockers found: {len(display_blockers)} (ignored for sleep)")
         for blocker in display_blockers:
             print(f"  - {blocker}")
 
-        print(f"\n✓ ACTIVELOCKSCREEN blockers found: {len(lockscreen_blockers)} (ignored for sleep)")
+        print(f"\n+ ACTIVELOCKSCREEN blockers found: {len(lockscreen_blockers)} (ignored for sleep)")
         for blocker in lockscreen_blockers:
             print(f"  - {blocker}")
 
         # Get filtered blockers (excluding our audio) - only sleep-blocking categories
         other_blockers = power_manager.get_other_power_requests()
-        print(f"\n✓ Sleep-blocking categories (SYSTEM+EXECUTION+AWAYMODE+PERFBOOST): {len(other_blockers)}")
+        print(f"\n+ Sleep-blocking categories (SYSTEM+EXECUTION+AWAYMODE+PERFBOOST): {len(other_blockers)}")
         if other_blockers:
             for blocker in other_blockers:
                 print(f"  - {blocker}")
-            print("\n⚠️  These apps are currently blocking sleep:")
+            print("\nWARNING  These apps are currently blocking sleep:")
             print("  (Computer should NOT sleep while these are active)")
         else:
             print("  None - only our audio recording blocking (computer can sleep)")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"ERROR Error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -129,7 +129,7 @@ def test_sleep_decision_logic():
     print("="*60)
     
     if platform.system() != "Windows":
-        print("⚠️  Skipping - not on Windows")
+        print("WARNING  Skipping - not on Windows")
         return
     
     try:
@@ -137,9 +137,9 @@ def test_sleep_decision_logic():
         
         # Test with Windows 10
         if platform.release() == "10":
-            print("✓ Detected Windows 10")
+            print("+ Detected Windows 10")
         else:
-            print(f"⚠️  Detected Windows {platform.release()} (not Windows 10)")
+            print(f"WARNING  Detected Windows {platform.release()} (not Windows 10)")
             print("  Sleep management is Windows 10 specific")
         
         power_manager = WindowsPowerManager(power_settings=settings.power)
@@ -152,27 +152,31 @@ def test_sleep_decision_logic():
         
         # Show details
         idle_time = power_manager.get_system_idle_time()
-        threshold = settings.power.idle_timeout_minutes
+        system_timeout = power_manager.get_system_idle_timeout_minutes()
         other_blockers = power_manager.get_other_power_requests()
-        
+
         print("\nDetails:")
         print(f"  Idle time: {idle_time:.2f} minutes")
-        print(f"  Threshold: {threshold} minutes")
-        print(f"  Idle requirement: {'✓ MET' if idle_time >= threshold else '✗ NOT MET'}")
+        if system_timeout == 0:
+            print(f"  System timeout: {system_timeout} minutes (sleep disabled)")
+            print("  Idle requirement: WARNING NOT APPLICABLE (sleep disabled)")
+        else:
+            print(f"  System timeout: {system_timeout} minutes")
+            print(f"  Idle requirement: {'+ MET' if idle_time >= system_timeout else 'FAIL NOT MET'}")
         print(f"  Other blockers: {len(other_blockers)}")
         if other_blockers:
             for blocker in other_blockers[:3]:
                 print(f"    - {blocker}")
-        print(f"  Blocker requirement: {'✓ MET (no blockers)' if not other_blockers else '✗ NOT MET (blockers present)'}")
-        
+        print(f"  Blocker requirement: {'+ MET (no blockers)' if not other_blockers else 'FAIL NOT MET (blockers present)'}")
+
         # Test configuration
         print("\nConfiguration:")
-        print(f"  Managed sleep enabled: {settings.power.windows10_managed_sleep_enabled}")
-        print(f"  Idle timeout: {settings.power.idle_timeout_minutes} minutes")
-        print(f"  Check interval: {settings.power.sleep_check_interval_seconds} seconds")
+        print(f"  allow_sleep_during_capture: {settings.power.allow_sleep_during_capture}")
+        print(f"  diagnose_on_startup: {settings.power.diagnose_on_startup}")
+        print("  (Windows 10 sleep management settings removed - now automatic)")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"ERROR Error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -187,24 +191,33 @@ def test_cross_platform_wrapper():
         settings = load_settings()
         power_manager = CrossPlatformPowerManager(settings)
         
-        print(f"✓ Platform: {power_manager.platform}")
+        print(f"+ Platform: {power_manager.platform}")
         
         # Test wrapper methods
         idle_time = power_manager.get_system_idle_time()
-        print(f"✓ get_system_idle_time(): {idle_time:.2f} minutes")
-        
+        print(f"+ get_system_idle_time(): {idle_time:.2f} minutes")
+
+        system_timeout = power_manager.get_system_idle_timeout_minutes()
+        if system_timeout >= 0:
+            if system_timeout == 0:
+                print(f"+ get_system_idle_timeout_minutes(): {system_timeout} minutes (sleep disabled)")
+            else:
+                print(f"+ get_system_idle_timeout_minutes(): {system_timeout} minutes")
+        else:
+            print(f"+ get_system_idle_timeout_minutes(): Cannot determine (return code: {system_timeout})")
+
         should_sleep, reason = power_manager.should_allow_sleep()
-        print(f"✓ should_allow_sleep(): {should_sleep} - {reason}")
+        print(f"+ should_allow_sleep(): {should_sleep} - {reason}")
 
         # Test with conversation active (should extend idle timeout)
         should_sleep_conversation, reason_conversation = power_manager.should_allow_sleep(conversation_active=True)
-        print(f"✓ should_allow_sleep(conversation_active=True): {should_sleep_conversation} - {reason_conversation}")
+        print(f"+ should_allow_sleep(conversation_active=True): {should_sleep_conversation} - {reason_conversation}")
 
         # Don't actually test force_sleep (would put computer to sleep!)
-        print("⚠️  Skipping force_sleep_if_appropriate() test (would sleep the computer)")
+        print("WARNING  Skipping force_sleep_if_appropriate() test (would sleep the computer)")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"ERROR Error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -219,17 +232,15 @@ def test_configuration_loading():
         settings = load_settings()
         
         if hasattr(settings, 'power'):
-            print("✓ Power settings loaded")
-            print(f"  windows10_managed_sleep_enabled: {settings.power.windows10_managed_sleep_enabled}")
-            print(f"  idle_timeout_minutes: {settings.power.idle_timeout_minutes}")
-            print(f"  sleep_check_interval_seconds: {settings.power.sleep_check_interval_seconds}")
+            print("+ Power settings loaded")
             print(f"  allow_sleep_during_capture: {settings.power.allow_sleep_during_capture}")
             print(f"  diagnose_on_startup: {settings.power.diagnose_on_startup}")
+            print("  (Windows 10 sleep management settings removed - now automatic)")
         else:
-            print("❌ Power settings not found in configuration")
+            print("ERROR: Power settings not found in configuration")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"ERROR Error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -245,7 +256,7 @@ def interactive_idle_time_test():
     time.sleep(3)
     
     if platform.system() != "Windows":
-        print("⚠️  Skipping - not on Windows")
+        print("WARNING  Skipping - not on Windows")
         return
     
     try:
@@ -261,12 +272,12 @@ def interactive_idle_time_test():
             time.sleep(1)
         
         print("\n" + "-" * 60)
-        print("✓ Monitoring complete")
+        print("+ Monitoring complete")
         
     except KeyboardInterrupt:
-        print("\n\n⚠️  Monitoring stopped by user")
+        print("\n\nWARNING  Monitoring stopped by user")
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\nERROR Error: {e}")
         import traceback
         traceback.print_exc()
 
@@ -295,7 +306,7 @@ def main():
     print("\n" + "="*60)
     print("All tests complete!")
     print("="*60)
-    print("\n⚠️  IMPORTANT: The actual sleep functionality was NOT tested")
+    print("\nWARNING  IMPORTANT: The actual sleep functionality was NOT tested")
     print("   to avoid putting your computer to sleep during testing.")
     print("\nTo test actual sleep behavior:")
     print("1. Run the main application (python -m src.main)")
@@ -309,7 +320,7 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"\n❌ Fatal error: {e}")
+        print(f"\nERROR Fatal error: {e}")
         import traceback
         traceback.print_exc()
 

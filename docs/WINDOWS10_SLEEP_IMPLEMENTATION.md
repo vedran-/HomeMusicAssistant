@@ -7,6 +7,8 @@
 
 This implementation adds intelligent sleep management for Windows 10 systems, allowing the voice assistant to run continuously while still permitting the computer to sleep when appropriate.
 
+**Important**: Windows 10 sleep management requires administrator privileges and will automatically elevate if not running as admin.
+
 ## The Problem
 
 On Windows 10, continuous audio recording for wake word detection creates a driver-level power request that blocks the system from entering sleep mode, even when the user is idle. This is different from Windows 11, which handles audio streams more intelligently.
@@ -148,19 +150,23 @@ Added new `power` section:
 
 ## Configuration Options
 
-### `windows10_managed_sleep_enabled` (default: `true`)
-- Enable or disable the feature entirely
-- Set to `false` if you don't want automatic sleep
+**Note**: Windows 10 sleep management is now automatic and not configurable. The following settings remain available:
 
-### `idle_timeout_minutes` (default: `10`)
-- How long user must be idle before sleep is considered
-- Increase if you want more time before sleep
-- Decrease for quicker sleep
+```json
+"power": {
+  "allow_sleep_during_capture": true,
+  "diagnose_on_startup": true,
+  "log_power_requests": false,
+  "auto_override_windows10_audio_blockers": true
+}
+```
 
-### `sleep_check_interval_seconds` (default: `120`)
-- How often to check sleep conditions while listening
-- Lower values = more responsive, more CPU usage
-- Higher values = less responsive, less CPU usage
+**Windows 10 Sleep Management**:
+- Automatically enabled on Windows 10
+- Uses system idle timeout setting (e.g., 10 minutes, 30 minutes, etc.)
+- Checks every 2 minutes for sleep conditions
+- Requires administrator privileges (auto-elevates if needed)
+- Extends timeout during conversations (system timeout + 5 minutes)
 
 ## Logging
 
@@ -291,8 +297,8 @@ This ensures the computer won't sleep while you're actively speaking to the assi
 ✅ **Windows 10 specific** - Doesn't affect Windows 11
 ✅ **Configurable** - Users can adjust all thresholds
 ✅ **Transparent** - Detailed logging of all decisions
-✅ **Safe** - Only sleeps when all conditions are right  
-✅ **No admin rights required** - Works for all users  
+✅ **Safe** - Only sleeps when all conditions are right
+✅ **Graceful fallback** - Works without admin rights (conservative mode)  
 
 ## Troubleshooting
 
@@ -303,11 +309,17 @@ This ensures the computer won't sleep while you're actively speaking to the assi
 python -m src.test_windows10_sleep
 ```
 
+**Check system sleep timeout**:
+```bash
+python -c "from src.utils.power_management import CrossPlatformPowerManager; from src.config.settings import load_settings; pm = CrossPlatformPowerManager(load_settings()); print(f'System timeout: {pm.get_system_idle_timeout_minutes()} minutes')"
+```
+
 **Common issues**:
-1. Feature disabled in config → Set `windows10_managed_sleep_enabled: true`
-2. Idle timeout too high → Reduce `idle_timeout_minutes`
-3. Other apps blocking → Close music/video players
-4. Check interval too long → Reduce `sleep_check_interval_seconds`
+1. System timeout is "Never" (0 minutes) → Sleep management disabled (respects Windows settings)
+2. Other apps blocking → Close music/video players
+3. Elevation failed → Allow UAC prompt or run as administrator
+4. System doesn't sleep → Check Windows power settings allow sleep
+5. Sleep disabled in Windows → Application won't force sleep (respects user choice)
 
 **Check logs** (set `"level": "DEBUG"` in config):
 ```
@@ -315,19 +327,42 @@ DEBUG: Windows 10 sleep check: system idle for X.X minutes
 DEBUG: PowerManager: Sleep check - [reason]
 ```
 
+### Administrator Privileges Required
+
+**Important**: Windows 10 sleep management requires administrator privileges and will automatically request elevation.
+
+**What happens**:
+- Application detects if running without admin rights
+- Automatically requests UAC elevation (may show prompt)
+- Once elevated, reads system idle timeout and logs it
+- Full sleep management functionality enabled
+
+**If elevation fails**:
+- Sleep management is **disabled** (cannot detect other blockers)
+- System will not force sleep (conservative approach)
+- Clear warnings shown in logs
+
+**If Windows sleep is disabled**:
+- System idle timeout = 0 minutes (detected automatically)
+- Sleep management respects Windows settings
+- System will not force sleep (respects user's choice)
+- Clear log message indicates sleep is disabled
+
+**To ensure proper operation**:
+- Allow the UAC elevation prompt when it appears
+- Or run the application as administrator from the start
+
 ### Computer sleeping too quickly
 
-1. Increase `idle_timeout_minutes` in config
-2. Or disable feature: `windows10_managed_sleep_enabled: false`
+1. The sleep timeout is determined by your Windows power settings
+2. To change it: Control Panel → Power Options → Change plan settings → Change advanced power settings → Sleep → Sleep after
 
 ### Want to prevent sleep entirely
 
-Set in config:
-```json
-"power": {
-  "windows10_managed_sleep_enabled": false
-}
-```
+Windows 10 sleep management is automatic and cannot be disabled. To prevent sleep:
+
+1. Set Windows power settings to "Never" sleep
+2. Or use a tool like `caffeine` or `insomnia` to prevent sleep
 
 ## Future Enhancements
 

@@ -24,10 +24,15 @@ class WindowsPowerManager:
         self.is_windows = platform.system() == "Windows"
         self.previous_state: Optional[int] = None
         self.power_settings = power_settings
-        
+        self.system_idle_timeout_minutes = -1  # Will be set during startup
+
         if not self.is_windows:
             app_logger.warning("PowerManager: Not running on Windows, power management features disabled")
             return
+
+        # Windows 10 specific: Ensure admin rights and get system timeout
+        if self._is_windows_10():
+            self._ensure_admin_rights_and_get_system_timeout()
 
         # Optionally run diagnostics on startup
         try:
@@ -35,6 +40,105 @@ class WindowsPowerManager:
                 self._diagnose_and_optionally_override()
         except Exception as e:
             app_logger.warning(f"PowerManager: Startup diagnostics failed: {e}")
+
+    def _ensure_admin_rights_and_get_system_timeout(self):
+        """Ensure we have admin rights on Windows 10 and get system idle timeout."""
+        # Check if we're already elevated (avoids infinite elevation loops)
+        if self._is_elevated():
+            app_logger.debug("PowerManager: Already running with administrator privileges")
+        elif not self._is_elevated():
+            app_logger.warning("PowerManager: Windows 10 sleep management requires administrator privileges")
+            app_logger.warning("PowerManager: Requesting elevation...")
+
+            # Try to elevate the process
+            if not self._elevate_process():
+                app_logger.error("PowerManager: Failed to elevate process - Windows 10 sleep management disabled")
+                return
+
+        # Get and log system idle timeout
+        system_timeout = self.get_system_idle_timeout_minutes()
+        if system_timeout >= 0:
+            if system_timeout == 0:
+                app_logger.info("PowerManager: Windows 10 sleep is disabled in system settings")
+            else:
+                app_logger.info(f"PowerManager: Windows 10 system idle timeout detected: {system_timeout} minutes")
+            self.system_idle_timeout_minutes = system_timeout
+        else:
+            app_logger.warning(f"PowerManager: Could not determine system idle timeout (got {system_timeout})")
+            # Use a reasonable default
+            self.system_idle_timeout_minutes = 10
+
+    def _elevate_process(self) -> bool:
+        """Try to elevate the current process to administrator using a separate launcher approach."""
+        try:
+            import sys
+            import os
+
+            app_logger.info("PowerManager: Creating admin launcher...")
+
+            # Create a temporary launcher script that runs as admin
+            launcher_code = f'''
+import sys
+import os
+import subprocess
+
+# This launcher runs as administrator and starts the main application
+print("Admin launcher: Starting main application...")
+
+# Get the directory of this launcher script
+launcher_dir = os.path.dirname(os.path.abspath(__file__))
+main_script = os.path.join(launcher_dir, "main.py")
+
+# Run the main application
+try:
+    result = subprocess.run([sys.executable, main_script] + sys.argv[1:])
+    print(f"Admin launcher: Main application exited with code: {{result.returncode}}")
+    sys.exit(result.returncode)
+except Exception as e:
+    print(f"Admin launcher: Error running main application: {{e}}")
+    sys.exit(1)
+'''
+
+            # Write the launcher script to a temporary file
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+                f.write(launcher_code)
+                launcher_file = f.name
+
+            app_logger.debug(f"PowerManager: Created launcher script: {launcher_file}")
+
+            # Use ShellExecute to run the launcher as administrator
+            import ctypes
+
+            app_logger.info(f"PowerManager: Executing admin launcher: {launcher_file}")
+
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None,  # hwnd
+                "runas",  # operation (run as admin)
+                sys.executable,  # python executable
+                f'"{launcher_file}"',  # launcher script
+                None,  # directory
+                1  # show window
+            )
+
+            # Clean up the temporary launcher file
+            try:
+                os.unlink(launcher_file)
+            except:
+                pass
+
+            if result > 32:  # ShellExecuteW returns > 32 on success
+                app_logger.info("PowerManager: Admin launcher executed successfully")
+                app_logger.info("PowerManager: Original process exiting")
+                sys.exit(0)
+            else:
+                error_code = ctypes.windll.kernel32.GetLastError()
+                app_logger.error(f"PowerManager: Admin launcher execution failed with error code: {error_code}")
+                return False
+
+        except Exception as e:
+            app_logger.error(f"PowerManager: Failed to create admin launcher: {e}")
+            return False
 
     # --- Diagnostics and Overrides (Windows 10 specific) ---
     def _is_windows_10(self) -> bool:
@@ -56,8 +160,9 @@ class WindowsPowerManager:
 
             # Check if command failed due to lack of admin rights
             if completed.returncode != 0 and "administrator privileges" in completed.stderr.lower():
-                app_logger.warning("PowerManager: powercfg /requests requires administrator privileges. Sleep management may not work correctly.")
-                app_logger.warning("PowerManager: Please run the application as administrator or disable Windows 10 managed sleep.")
+                app_logger.warning("PowerManager: powercfg /requests requires administrator privileges.")
+                app_logger.warning("PowerManager: Sleep management disabled - cannot detect if other apps are blocking sleep.")
+                app_logger.warning("PowerManager: Run as administrator for full sleep management functionality.")
                 return ""
 
             return (completed.stdout or "") + ("\n" + completed.stderr if completed.stderr else "")
@@ -177,6 +282,41 @@ class WindowsPowerManager:
             app_logger.error(f"PowerManager: Error getting system idle time: {e}")
             return 0.0
     
+    def get_system_idle_timeout_minutes(self) -> int:
+        """
+        Get the system's configured idle timeout for sleep in minutes.
+        Returns 0 if never sleep, or -1 if cannot determine.
+        """
+        if not self.is_windows:
+            return -1
+
+        try:
+            # Query current power scheme for STANDBYIDLE (sleep after) setting
+            completed = subprocess.run([
+                "powercfg", "/q", "SCHEME_CURRENT", "SUB_SLEEP", "STANDBYIDLE"
+            ], capture_output=True, text=True, shell=False)
+
+            if completed.returncode != 0:
+                app_logger.warning("PowerManager: Failed to query system sleep timeout")
+                return -1
+
+            # Parse output to find Current AC Power Setting Index
+            output = completed.stdout
+            for line in output.splitlines():
+                if "Current AC Power Setting Index:" in line:
+                    hex_value = line.split(":")[1].strip()
+                    seconds = int(hex_value, 16)
+                    minutes = seconds // 60
+                    app_logger.debug(f"PowerManager: System sleep timeout is {minutes} minutes")
+                    return minutes
+
+            app_logger.warning("PowerManager: Could not parse system sleep timeout")
+            return -1
+
+        except Exception as e:
+            app_logger.error(f"PowerManager: Error getting system idle timeout: {e}")
+            return -1
+
     def get_other_power_requests(self) -> List[str]:
         """
         Get list of power requests from other applications (not our audio driver).
@@ -196,6 +336,8 @@ class WindowsPowerManager:
         try:
             output = self._powercfg_requests()
             if not output:
+                # Return empty list if we can't get power requests (no admin rights)
+                # This means we can't detect other blockers, so we should be conservative
                 return []
 
             # Parse all categories that can block system sleep
@@ -265,12 +407,18 @@ class WindowsPowerManager:
         if not self.power_settings:
             return (False, "No power settings configured")
 
-        if not getattr(self.power_settings, 'windows10_managed_sleep_enabled', False):
-            return (False, "Windows 10 managed sleep disabled in config")
+        # Check if sleep is disabled in Windows settings
+        if self.system_idle_timeout_minutes == 0:
+            return (False, "Sleep disabled in Windows power settings")
 
         # Check idle time (but account for conversation activity)
         idle_minutes = self.get_system_idle_time()
-        threshold = getattr(self.power_settings, 'idle_timeout_minutes', 10)
+
+        # Use system idle timeout if available, otherwise use default
+        if self.system_idle_timeout_minutes > 0:
+            threshold = self.system_idle_timeout_minutes
+        else:
+            threshold = 10  # fallback default
 
         # If user is actively conversing with assistant, extend idle threshold
         if conversation_active:
@@ -280,14 +428,17 @@ class WindowsPowerManager:
                 return (False, f"Conversation active - idle {idle_minutes:.1f}min < {conversation_threshold}min threshold")
         else:
             if idle_minutes < threshold:
-                return (False, f"Not idle enough ({idle_minutes:.1f}min < {threshold}min)")
+                return (False, f"Not idle enough ({idle_minutes:.1f}min < {threshold}min system threshold)")
 
         # Check for other blockers
         other_blockers = self.get_other_power_requests()
 
-        # Warn if we might not have full power request information
+        # Handle case where we can't get power requests (no admin rights)
         if not other_blockers and not self._is_elevated():
-            app_logger.debug("PowerManager: Running without admin rights - may not detect all power requests")
+            # We can't detect other blockers, so be conservative and don't force sleep
+            # This prevents accidentally sleeping while music is playing
+            app_logger.debug("PowerManager: Cannot detect power requests without admin rights - not forcing sleep")
+            return (False, "Cannot detect power requests (no admin rights) - being conservative")
 
         if other_blockers:
             # Log what types of blockers were found for debugging
@@ -476,6 +627,18 @@ class CrossPlatformPowerManager:
         """Force sleep if all conditions are met (Windows 10 only)."""
         if self.power_manager and hasattr(self.power_manager, 'force_sleep_if_appropriate'):
             return self.power_manager.force_sleep_if_appropriate(conversation_active)
+        return False
+
+    def get_system_idle_timeout_minutes(self) -> int:
+        """Get the system's configured idle timeout for sleep in minutes (Windows only)."""
+        if self.power_manager and hasattr(self.power_manager, 'get_system_idle_timeout_minutes'):
+            return self.power_manager.get_system_idle_timeout_minutes()
+        return -1
+
+    def _is_windows_10(self) -> bool:
+        """Check if running on Windows 10 (for Windows 10 sleep management)."""
+        if self.power_manager and hasattr(self.power_manager, '_is_windows_10'):
+            return self.power_manager._is_windows_10()
         return False
 
 

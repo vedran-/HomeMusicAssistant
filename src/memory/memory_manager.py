@@ -34,12 +34,7 @@ class MemoryManager:
                 },
                 "embedder": {
                     "provider": mc.embedder_provider or "lmstudio",
-                    "config": {
-                        # For gemini: model and api_key
-                        "model": mc.embedder_model,
-                        "api_key": mc.embedder_api_key or app_settings.google_api_key if app_settings else None,
-                        # For lmstudio: base url/model can be defaulted by mem0
-                    }
+                    "config": self._build_embedder_config(mc.embedder_provider or "lmstudio", mc.embedder_model, mc.embedder_api_key, app_settings)
                 },
                 "vector_store": {
                     "provider": mc.vector_store_provider or "qdrant",
@@ -53,15 +48,40 @@ class MemoryManager:
             data_path = mc.data_path
         else:
             self.enabled = bool(config and config.enabled)
+            data_path = getattr(config, 'data_path', None) if config else None
             if config:
                 # Convert Pydantic config to dict
                 if hasattr(config, 'model_dump'):
                     mem0_config_dict = config.model_dump(exclude_unset=True)
                 else:
                     mem0_config_dict = config.dict(exclude_unset=True)
-                data_path = getattr(config, 'data_path', None) or mem0_config_dict.get("data_path")
-            else:
-                data_path = None
+
+    def _build_embedder_config(self, provider: str, model: str, api_key: str, app_settings) -> Dict[str, Any]:
+        """Build embedder configuration based on provider type."""
+        if provider == "ollama":
+            # Ollama embedder config - model is passed differently
+            return {"model": model}
+        elif provider == "gemini":
+            # Gemini embedder config
+            return {
+                "model": model,
+                "api_key": api_key or (app_settings.google_api_key if app_settings else None)
+            }
+        elif provider == "openai":
+            # OpenAI embedder config
+            return {
+                "model": model,
+                "api_key": api_key
+            }
+        elif provider == "huggingface":
+            # HuggingFace embedder config
+            return {"model": model}
+        elif provider == "lmstudio":
+            # LMStudio embedder config (minimal config needed)
+            return {}
+        else:
+            # Default/fallback config
+            return {"model": model}
 
         if self.enabled and mem0_config_dict:
             try:
