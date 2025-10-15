@@ -588,12 +588,14 @@ class ToolRegistry:
         
         filter_priority = parameters.get("filter_priority")
         filter_tag = parameters.get("filter_tag")
+        filter_text = parameters.get("filter_text")
         count = parameters.get("count", 2)
         offset = parameters.get("offset", 0)
         
         success, message, tasks, total_count = self.todo_manager.list_tasks(
             filter_priority=filter_priority,
             filter_tag=filter_tag,
+            filter_text=filter_text,
             count=count,
             offset=offset
         )
@@ -619,6 +621,11 @@ class ToolRegistry:
                 if total_count != 1:
                     feedback += "s"
                 feedback += f" tagged {filter_tag}"
+            elif filter_text:
+                feedback = f"You have {total_count} task"
+                if total_count != 1:
+                    feedback += "s"
+                feedback += f" containing '{filter_text}'"
             else:
                 feedback = f"You have {total_count} task"
                 if total_count != 1:

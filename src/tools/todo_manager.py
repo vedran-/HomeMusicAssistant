@@ -262,6 +262,7 @@ class TodoManager:
         self,
         filter_priority: Optional[str] = None,
         filter_tag: Optional[str] = None,
+        filter_text: Optional[str] = None,
         count: int = 10,
         offset: int = 0
     ) -> Tuple[bool, str, List[Task], int]:
@@ -271,6 +272,7 @@ class TodoManager:
         Args:
             filter_priority: Filter by priority (high, medium, low)
             filter_tag: Filter by tag
+            filter_text: Filter by text content in task description (case-insensitive)
             count: Maximum number of tasks to return
             offset: Number of tasks to skip (for pagination)
             
@@ -289,6 +291,10 @@ class TodoManager:
             
             if filter_tag:
                 tasks = [t for t in tasks if (filter_tag.lower() in [tag.lower() for tag in t.tags]) or (filter_tag.lower() in t.description.lower())]
+            
+            if filter_text:
+                filter_text_lower = filter_text.lower()
+                tasks = [t for t in tasks if filter_text_lower in t.description.lower()]
             
             # Sort by priority: high -> medium -> low -> none
             priority_order = {'high': 0, 'medium': 1, 'low': 2, None: 3}

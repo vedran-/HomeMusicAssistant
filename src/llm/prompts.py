@@ -125,6 +125,8 @@ Examples:
 - If user says "show all my tasks" → call list_tasks with count=10
 - If user says "what's the third task" → call get_task with task_number=3
 - If user says "show high priority tasks" → call list_tasks with filter_priority="high", count=5
+- If user says "find tasks with donna" → call list_tasks with filter_text="donna"
+- If user says "search for milk tasks" → call list_tasks with filter_text="milk"
 - If user says "mark first task as done" → call complete_task with task_identifier="1"
 - If user says "complete the milk task" → call complete_task with task_identifier="milk"
 - If user says "mark second task as obsolete" → call obsolete_task with task_identifier="2"
@@ -391,6 +393,10 @@ def get_available_tools() -> List[Dict[str, Any]]:
                         "filter_tag": {
                             "type": "string",
                             "description": "Filter tasks by tag"
+                        },
+                        "filter_text": {
+                            "type": "string",
+                            "description": "Filter tasks by text content in description (case-insensitive search)"
                         },
                         "count": {
                             "type": "integer",
