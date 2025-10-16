@@ -56,33 +56,7 @@ class MemoryManager:
                 else:
                     mem0_config_dict = config.dict(exclude_unset=True)
 
-    def _build_embedder_config(self, provider: str, model: str, api_key: str, app_settings) -> Dict[str, Any]:
-        """Build embedder configuration based on provider type."""
-        if provider == "ollama":
-            # Ollama embedder config - model is passed differently
-            return {"model": model}
-        elif provider == "gemini":
-            # Gemini embedder config
-            return {
-                "model": model,
-                "api_key": api_key or (app_settings.google_api_key if app_settings else None)
-            }
-        elif provider == "openai":
-            # OpenAI embedder config
-            return {
-                "model": model,
-                "api_key": api_key
-            }
-        elif provider == "huggingface":
-            # HuggingFace embedder config
-            return {"model": model}
-        elif provider == "lmstudio":
-            # LMStudio embedder config (minimal config needed)
-            return {}
-        else:
-            # Default/fallback config
-            return {"model": model}
-
+        # Initialize mem0 using the composed configuration
         if self.enabled and mem0_config_dict:
             try:
                 # Handle data path specifically for the vector store
@@ -107,7 +81,6 @@ class MemoryManager:
                     # Log the default path for user visibility
                     default_path = os.path.join(os.path.expanduser("~"), ".mem0")
                     app_logger.info(f"MemoryManager using default data path: {default_path}")
-
 
                 # Extra diagnostics for embedder config
                 embedder_provider = mem0_config_dict.get('embedder', {}).get('provider')
@@ -135,12 +108,41 @@ class MemoryManager:
                         app_logger.error("Fallback to 'lmstudio' embedder also failed: {}", fe, exc_info=True)
                         app_logger.warning("Disabling MemoryManager due to initialization error.")
                         self.enabled = False
+                        self.mem0 = None
                 else:
                     app_logger.warning("Disabling MemoryManager due to initialization error.")
                     self.enabled = False
+                    self.mem0 = None
         else:
             self.mem0 = None
             app_logger.info("MemoryManager is disabled.")
+
+    def _build_embedder_config(self, provider: str, model: str, api_key: str, app_settings) -> Dict[str, Any]:
+        """Build embedder configuration based on provider type."""
+        if provider == "ollama":
+            # Ollama embedder config - model is passed differently
+            return {"model": model}
+        elif provider == "gemini":
+            # Gemini embedder config
+            return {
+                "model": model,
+                "api_key": api_key or (app_settings.google_api_key if app_settings else None)
+            }
+        elif provider == "openai":
+            # OpenAI embedder config
+            return {
+                "model": model,
+                "api_key": api_key
+            }
+        elif provider == "huggingface":
+            # HuggingFace embedder config
+            return {"model": model}
+        elif provider == "lmstudio":
+            # LMStudio embedder config (minimal config needed)
+            return {}
+        else:
+            # Default/fallback config
+            return {"model": model}
 
     def add(self, messages: List[Dict[str, Any]], user_id: str, session_id: Optional[str] = None, infer: bool = True):
         if not self.enabled:
