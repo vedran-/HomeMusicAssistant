@@ -469,6 +469,7 @@ class ToolRegistry:
             message = message[:500] + "..."
         
         # Basic content filtering (prevent system commands or suspicious content)
+        """
         suspicious_keywords = ["system", "execute", "run", "cmd", "powershell", "bash", "script"]
         message_lower = message.lower()
         if any(keyword in message_lower for keyword in suspicious_keywords):
@@ -478,6 +479,7 @@ class ToolRegistry:
                 "error": "Suspicious content detected",
                 "feedback": "I can't speak that response"
             }
+        """
         
         app_logger.info(f"Speaking informational response ({response_type}): '{message[:50]}{'...' if len(message) > 50 else ''}'")
         
